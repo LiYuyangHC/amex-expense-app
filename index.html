@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>刷卡记账</title>
+
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="刷卡记账">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Arial, sans-serif;
+      background: radial-gradient(circle at top left,#061a2f,transparent 45%),
+                  radial-gradient(circle at top right,#270918,transparent 45%),
+                  #000;
+      color: #f5f5f7;
+    }
+    .page { max-width: 460px; margin: 0 auto; padding: 34px 18px 42px; }
+    h1 { font-size: 42px; margin: 20px 8px 24px; letter-spacing: -1px; }
+    .card {
+      background: rgba(28,28,30,.84);
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 28px;
+      padding: 24px;
+      margin-bottom: 18px;
+      backdrop-filter: blur(24px);
+    }
+    label { display:block; color:#a1a1a6; font-weight:800; margin: 0 0 8px 4px; }
+    input, select {
+      width:100%; height:58px; border:0; border-radius:18px;
+      background:rgba(58,58,60,.8); color:#fff;
+      padding:0 16px; font-size:18px; box-sizing:border-box;
+      margin-bottom:18px;
+    }
+    button {
+      width:100%; height:58px; border:0; border-radius:18px;
+      background:#0a84ff; color:white; font-size:20px; font-weight:800;
+    }
+    .stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .stat { padding:16px; }
+    .num { font-size:24px; font-weight:900; color:#30d158; }
+    .record { padding:14px 0; border-top:1px solid rgba(255,255,255,.12); }
+    .muted { color:#a1a1a6; font-size:13px; }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <h1>刷卡记账</h1>
+
+    <div class="card">
+      <label>金额</label>
+      <input id="amount" type="number" step="0.01" inputmode="decimal" placeholder="0.00">
+
+      <label>日期</label>
+      <input id="date" type="date">
+
+      <label>类别</label>
+      <select id="category">
+        <option>🍜餐饮</option>
+        <option>🛒买菜</option>
+        <option>🚗交通</option>
+        <option>🎮娱乐</option>
+        <option>📄学习</option>
+        <option>🏠房租</option>
+        <option>🎁购物</option>
+        <option>📦其他</option>
+      </select>
+
+      <label>备注</label>
+      <input id="note" placeholder="午餐 麦当劳">
+
+      <button onclick="saveRecord()">保存记录</button>
+      <p id="msg" class="muted"></p>
+    </div>
+
+    <div class="stats">
+      <div class="card stat">
+        <div class="muted">本月总计</div>
+        <div class="num" id="monthTotal">$0.00</div>
+      </div>
+      <div class="card stat">
+        <div class="muted">记录数</div>
+        <div class="num" id="count">0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>最近记录</h2>
+      <div id="records"></div>
+    </div>
+  </div>
+
+<script>
+  const KEY = "amex_records_v1";
+  const amount = document.getElementById("amount");
+  const date = document.getElementById("date");
+  const category = document.getElementById("category");
+  const note = document.getElementById("note");
+
+  date.valueAsDate = new Date();
+
+  function getRecords() {
+    return JSON.parse(localStorage.getItem(KEY) || "[]");
+  }
+
+  function setRecords(records) {
+    localStorage.setItem(KEY, JSON.stringify(records));
+  }
+
+  function saveRecord() {
+    if (!amount.value) return;
+
+    const records = getRecords();
+    records.unshift({
+      id: Date.now().toString(),
+      date: date.value,
+      category: category.value,
+      amount: Number(amount.value),
+      note: note.value
+    });
+
+    setRecords(records);
+
+    amount.value = "";
+    note.value = "";
+    date.valueAsDate = new Date();
+
+    document.getElementById("msg").textContent = "✅ 已保存到本地";
+    render();
+  }
+
+  function render() {
+    const records = getRecords();
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+
+    const total = records
+      .filter(r => r.date.startsWith(ym))
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+
+    document.getElementById("monthTotal").textContent = "$" + total.toFixed(2);
+    document.getElementById("count").textContent = records.length;
+
+    document.getElementById("records").innerHTML = records.slice(0, 20).map(r => `
+      <div class="record">
+        <strong>${r.category} · $${Number(r.amount).toFixed(2)}</strong>
+        <div class="muted">${r.date}${r.note ? " · " + r.note : ""}</div>
+      </div>
+    `).join("");
+  }
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./service-worker.js");
+  }
+
+  render();
+</script>
+</body>
+</html>
