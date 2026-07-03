@@ -49,14 +49,24 @@ button { border: 0; cursor: pointer; }
   margin-bottom: 26px;
 }
 .stat-card {
-  min-width: 0; overflow: hidden; border-radius: 22px; padding: 16px 13px;
+  min-width: 0; overflow: hidden; border-radius: 22px; padding: 15px 10px;
   background: linear-gradient(145deg, rgba(28,30,34,.92), rgba(14,16,19,.88));
   border: 1px solid var(--line-strong);
   box-shadow: 0 16px 36px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.04);
 }
-.stat-title { color: var(--sub); font-size: 14px; font-weight: 820; margin-bottom: 12px; white-space: nowrap; }
-.stat-number { font-size: clamp(19px, 5vw, 28px); font-weight: 920; letter-spacing: -.8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1; }
-.stat-range { color: var(--sub); font-size: 12px; margin-top: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-title { color: var(--sub); font-size: 13px; font-weight: 820; margin-bottom: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-number {
+  font-size: clamp(17px, 4.2vw, 23px);
+  font-weight: 920;
+  letter-spacing: -.6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  line-height: 1.05;
+  max-width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.stat-range { color: var(--sub); font-size: 11.5px; margin-top: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .blue { color: var(--blue); } .purple { color: var(--purple); } .green { color: var(--green); }
 
 .records-section { margin-top: 4px; }
@@ -71,10 +81,24 @@ button { border: 0; cursor: pointer; }
   backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
 }
 .record {
-  display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px;
-  align-items: center; padding: 15px 16px; border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: 15px 16px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
 }
 .record:first-child { border-top: 0; }
+.record:active { background: rgba(255,255,255,.045); }
 .record-icon {
   width: 48px; height: 48px; display: grid; place-items: center; border-radius: 15px;
   background: rgba(255,255,255,.07); font-size: 23px;
@@ -150,7 +174,10 @@ button { border: 0; cursor: pointer; }
 @media (max-width: 380px) {
   .app-shell { padding-left: 12px; padding-right: 12px; }
   .stats-row { gap: 8px; }
-  .stat-card { padding: 14px 10px; }
+  .stat-card { padding: 13px 8px; }
+  .stat-number { font-size: clamp(15px, 4vw, 20px); letter-spacing: -.4px; }
+  .stat-title { font-size: 12px; }
+  .stat-range { font-size: 10.5px; }
   .bottom-bar { grid-template-columns: 1fr 74px 1fr; padding-left: 10px; padding-right: 10px; }
   .fab { width: 70px; height: 70px; }
   .bottom-action { padding: 9px 8px; gap: 6px; }

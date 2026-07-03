@@ -1,3 +1,3 @@
-# amex-expense-app v2.2
+# amex-expense-app v2.3
 
-新增账期查看：可选择任意年份/月的账期，同时保留账期开始日设置。
+Fixes: adaptive stat numbers and dark full-width record list styling.
