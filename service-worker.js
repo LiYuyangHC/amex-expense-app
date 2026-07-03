@@ -1,4 +1,4 @@
-const CACHE_NAME = "amex-expense-v2";
+const CACHE_NAME = "amex-expense-v2.1";
 const ASSETS = [
   "./",
   "./index.html",

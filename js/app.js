@@ -66,6 +66,8 @@ async function init() {
   els.billingStartDay.value = String(billingStartDay);
 
   records = await DB.getAllRecords();
+  await seedExistingRecordsOnce();
+  records = await DB.getAllRecords();
   render();
   registerServiceWorker();
 }
@@ -103,6 +105,63 @@ function initEvents() {
   [els.expenseSheet, els.dateSheet, els.billingSheet, els.accountSheet].forEach(backdrop => {
     backdrop.addEventListener("click", e => { if (e.target === backdrop) backdrop.classList.add("hidden"); });
   });
+}
+
+
+async function seedExistingRecordsOnce() {
+  const done = await DB.getSetting("seededExistingRecordsV1", false);
+  if (done) return;
+
+  const existingIds = new Set(records.map(r => r.id));
+  const now = new Date().toISOString();
+  const existingRecords = [
+    { id:"legacy_20260630_1928", date:"2026-06-30", category:"🍜餐饮", amount:19.28, note:"午餐" },
+    { id:"legacy_20260627_106", date:"2026-06-27", category:"🍜餐饮", amount:106, note:"晚餐" },
+    { id:"legacy_20260627_5", date:"2026-06-27", category:"🎁购物", amount:5, note:"头绳" },
+    { id:"legacy_20260627_50", date:"2026-06-27", category:"🚗交通", amount:50, note:"换驾照" },
+    { id:"legacy_20260626_328", date:"2026-06-26", category:"🍜餐饮", amount:32.8, note:"晚餐 tqco" },
+    { id:"legacy_20260624_68", date:"2026-06-24", category:"🍜餐饮", amount:68, note:"晚餐 咖喱饭" },
+    { id:"legacy_20260623_44", date:"2026-06-23", category:"🎁购物", amount:44, note:"发膜" },
+    { id:"legacy_20260622_178", date:"2026-06-22", category:"🎁购物", amount:178, note:"移动硬盘" },
+    { id:"legacy_20260622_100", date:"2026-06-22", category:"🍜餐饮", amount:100, note:"午餐" },
+    { id:"legacy_20260621_12612", date:"2026-06-21", category:"🍜餐饮", amount:126.12, note:"晚餐" },
+    { id:"legacy_20260618_6864", date:"2026-06-18", category:"🎁购物", amount:68.64, note:"眼霜" },
+    { id:"legacy_20260616_98", date:"2026-06-16", category:"🚗交通", amount:98, note:"Uber 回波士顿" },
+    { id:"legacy_20260615_150", date:"2026-06-15", category:"🛒买菜", amount:150, note:"Trader Joe's" },
+    { id:"legacy_20260606_9", date:"2026-06-06", category:"🎁购物", amount:9, note:"扫把" },
+    { id:"legacy_20260603_1550", date:"2026-06-03", category:"🏠房租", amount:1550, note:"房租" },
+    { id:"legacy_20260601_85", date:"2026-06-01", category:"🎁购物", amount:8.5, note:"花" },
+    { id:"legacy_20260529_21661", date:"2026-05-29", category:"🛒买菜", amount:216.61, note:"Costco" },
+    { id:"legacy_20260528_60", date:"2026-05-28", category:"🍜餐饮", amount:60, note:"生煎" },
+    { id:"legacy_20260527_14", date:"2026-05-27", category:"🎁购物", amount:14, note:"冲鼻器" },
+    { id:"legacy_20260527_7202", date:"2026-05-27", category:"🍜餐饮", amount:72.02, note:"晚餐" },
+    { id:"legacy_20260526_8418", date:"2026-05-26", category:"🎁购物", amount:84.18, note:"柜子" },
+    { id:"legacy_20260521_16962", date:"2026-05-21", category:"🏠房租", amount:169.62, note:"电费" },
+    { id:"legacy_20260521_39", date:"2026-05-21", category:"🛒买菜", amount:39, note:"买菜" },
+    { id:"legacy_20260518_138", date:"2026-05-18", category:"🍜餐饮", amount:138, note:"Eva" },
+    { id:"legacy_20260518_5674", date:"2026-05-18", category:"🛒买菜", amount:56.74, note:"Trader Joe's" },
+    { id:"legacy_20260516_69", date:"2026-05-16", category:"🍜餐饮", amount:6.9, note:"星巴克" },
+    { id:"legacy_20260515_3124", date:"2026-05-15", category:"🍜餐饮", amount:31.24, note:"麦当劳" },
+    { id:"legacy_20260515_213", date:"2026-05-15", category:"🍜餐饮", amount:21.3, note:"面包" },
+    { id:"legacy_20260513_89", date:"2026-05-13", category:"🛒买菜", amount:89, note:"买菜" },
+    { id:"legacy_20260513_12842", date:"2026-05-13", category:"🛒买菜", amount:128.42, note:"买菜" },
+    { id:"legacy_20260505_93", date:"2026-05-05", category:"🛒买菜", amount:93, note:"买菜" },
+    { id:"legacy_20260503_1500", date:"2026-05-03", category:"🏠房租", amount:1500, note:"房租" },
+    { id:"legacy_20260502_8244", date:"2026-05-02", category:"🍜餐饮", amount:82.44, note:"餐饮" }
+  ];
+
+  let added = 0;
+  for (const record of existingRecords) {
+    if (existingIds.has(record.id)) continue;
+    await DB.saveRecord({
+      ...record,
+      createdAt: now,
+      updatedAt: now
+    });
+    added++;
+  }
+  await DB.setSetting("seededExistingRecordsV1", true);
+  if (added > 0) setTimeout(() => showToast(`已连接 ${added} 条历史记录`), 400);
 }
 
 function openExpenseSheet(record) {
@@ -236,7 +295,7 @@ function render() {
   els.cycleRange.textContent = `${formatShort(cycle.start)} ~ ${formatShort(addDays(cycle.end, -1))}`;
   els.monthRange.textContent = `${formatShort(month.start)} ~ ${formatShort(addDays(month.end, -1))}`;
   els.yearRange.textContent = `${year.start.getFullYear()}年`;
-  els.billingLabel.textContent = `每月${billingStartDay}日开始`;
+  els.billingLabel.textContent = `${billingStartDay}日开始`;
 
   renderRecords(cycleRecords);
 }
