@@ -8,3 +8,4 @@ V1.1 local-first PWA.
 - 默认显示当前账期、自然月、自然年统计
 - CSV 导出
 - 离线可用
+- broken
