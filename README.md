@@ -1,11 +1,11 @@
 # amex-expense-app
 
-V1.1 local-first PWA.
+iOS-first PWA for local expense tracking.
 
-- 本地 IndexedDB 存储
-- 新增 / 编辑 / 删除记录
-- 自定义账期开始日
-- 默认显示当前账期、自然月、自然年统计
-- CSV 导出
-- 离线可用
-- broken
+V1.2 features:
+- IndexedDB local database
+- Add / edit / delete records
+- Custom billing cycle start day
+- Current billing cycle, natural month, natural year statistics
+- CSV export
+- Offline-capable PWA

@@ -2,10 +2,11 @@
   "name": "建行 AMEX 记账",
   "short_name": "刷卡记账",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#061a2f",
   "theme_color": "#061a2f",
   "icons": [
-    { "src": "icon.png", "sizes": "1024x1024", "type": "image/png" }
+    { "src": "icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any maskable" }
   ]
 }

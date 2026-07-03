@@ -6,35 +6,36 @@
   <title>刷卡记账</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icon.png">
-  <link rel="stylesheet" href="./css/app.css?v=1.1">
+  <link rel="stylesheet" href="./css/app.css">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="刷卡记账">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#061a2f">
 </head>
 <body>
-  <div class="page">
-    <header class="header">
+  <main class="page">
+    <header class="hero">
       <div class="eyebrow">建行 AMEX</div>
       <h1>刷卡记账</h1>
-      <div class="subtitle">本地优先 · 离线可用</div>
+      <div class="subline" id="cycleLabel">当前账期</div>
     </header>
 
     <section class="card form-card">
-      <div class="edit-banner hidden" id="editBanner">正在编辑记录</div>
+      <div class="mode-row">
+        <span id="formTitle">记一笔</span>
+        <button class="link hidden" id="cancelEditButton">取消编辑</button>
+      </div>
 
-      <label for="amount">金额</label>
+      <label>金额</label>
       <div class="amount-box">
         <span>$</span>
         <input id="amount" type="number" step="0.01" inputmode="decimal" placeholder="0.00">
       </div>
 
       <label>日期</label>
-      <button class="date-button" id="dateButton" type="button">
-        <span id="dateText">选择日期</span><b>›</b>
-      </button>
+      <button class="field-button" id="dateButton" type="button">选择日期</button>
 
-      <label for="category">类别</label>
+      <label>类别</label>
       <select id="category">
         <option>🍜餐饮</option>
         <option>🛒买菜</option>
@@ -46,76 +47,46 @@
         <option>📦其他</option>
       </select>
 
-      <label for="note">备注</label>
+      <label>备注</label>
       <input id="note" type="text" placeholder="午餐 麦当劳">
 
       <button class="primary" id="saveButton" type="button">保存记录</button>
-      <button class="ghost hidden" id="cancelEditButton" type="button">取消编辑</button>
       <div class="msg" id="msg"></div>
     </section>
 
     <section class="card settings-card">
-      <div class="section-title">账期设置</div>
-      <label for="billingStartDay">账期开始日</label>
-      <select id="billingStartDay">
-        <option value="1">每月1日 → 次月前一日</option>
-        <option value="2">每月2日 → 次月1日</option>
-        <option value="3">每月3日 → 次月2日</option>
-        <option value="4">每月4日 → 次月3日</option>
-        <option value="5">每月5日 → 次月4日</option>
-        <option value="6">每月6日 → 次月5日</option>
-        <option value="7">每月7日 → 次月6日</option>
-        <option value="8">每月8日 → 次月7日</option>
-        <option value="9">每月9日 → 次月8日</option>
-        <option value="10">每月10日 → 次月9日</option>
-        <option value="11">每月11日 → 次月10日</option>
-        <option value="12">每月12日 → 次月11日</option>
-        <option value="13">每月13日 → 次月12日</option>
-        <option value="14">每月14日 → 次月13日</option>
-        <option value="15">每月15日 → 次月14日</option>
-        <option value="16">每月16日 → 次月15日</option>
-        <option value="17">每月17日 → 次月16日</option>
-        <option value="18">每月18日 → 次月17日</option>
-        <option value="19">每月19日 → 次月18日</option>
-        <option value="20">每月20日 → 次月19日</option>
-        <option value="21">每月21日 → 次月20日</option>
-        <option value="22">每月22日 → 次月21日</option>
-        <option value="23">每月23日 → 次月22日</option>
-        <option value="24">每月24日 → 次月23日</option>
-        <option value="25">每月25日 → 次月24日</option>
-        <option value="26">每月26日 → 次月25日</option>
-        <option value="27">每月27日 → 次月26日</option>
-        <option value="28">每月28日 → 次月27日</option>
-      </select>
-      <div class="hint" id="billingHint"></div>
+      <div class="section-title">设置</div>
+      <label>账期开始日</label>
+      <select id="billingStartDay"></select>
+      <div class="hint">例如 16 日表示：每月 16 日 ～ 次月 15 日</div>
     </section>
 
-    <section class="stats">
-      <div class="stat card">
+    <section class="stats-grid">
+      <div class="card stat-card">
+        <div class="stat-title">当前账期</div>
+        <div class="stat-number purple" id="cycleTotal">$0.00</div>
+        <div class="stat-range" id="cycleRange"></div>
+      </div>
+      <div class="card stat-card">
         <div class="stat-title">自然月</div>
         <div class="stat-number blue" id="monthTotal">$0.00</div>
         <div class="stat-range" id="monthRange"></div>
       </div>
-      <div class="stat card">
-        <div class="stat-title">本账期</div>
-        <div class="stat-number purple" id="cycleTotal">$0.00</div>
-        <div class="stat-range" id="cycleRange"></div>
-      </div>
-      <div class="stat card">
+      <div class="card stat-card">
         <div class="stat-title">自然年</div>
         <div class="stat-number green" id="yearTotal">$0.00</div>
         <div class="stat-range" id="yearRange"></div>
       </div>
     </section>
 
-    <section class="records card">
+    <section class="card records-card">
       <div class="records-head">
-        <span>本账期记录</span>
-        <button class="link" id="exportButton" type="button">导出CSV</button>
+        <span>账期记录</span>
+        <button class="link" id="exportButton" type="button">导出 CSV</button>
       </div>
       <div id="recordsList"></div>
     </section>
-  </div>
+  </main>
 
   <div class="sheet-backdrop hidden" id="dateSheet">
     <div class="sheet">
@@ -134,19 +105,7 @@
     </div>
   </div>
 
-  <div class="sheet-backdrop hidden" id="recordSheet">
-    <div class="sheet">
-      <div class="handle"></div>
-      <div class="sheet-head">
-        <button class="link" id="recordCancel" type="button">取消</button>
-        <strong>记录操作</strong>
-        <button class="link danger" id="recordDelete" type="button">删除</button>
-      </div>
-      <button class="primary" id="recordEdit" type="button">编辑这笔</button>
-    </div>
-  </div>
-
-  <script src="./js/db.js?v=1.1"></script>
-  <script src="./js/app.js?v=1.1"></script>
+  <script src="./js/db.js"></script>
+  <script src="./js/app.js"></script>
 </body>
 </html>
