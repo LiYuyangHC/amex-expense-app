@@ -38,6 +38,9 @@ const els = {
   billingCancel: $("billingCancel"),
   billingDone: $("billingDone"),
   billingStartDay: $("billingStartDay"),
+  viewYear: $("viewYear"),
+  viewMonth: $("viewMonth"),
+  billingPreview: $("billingPreview"),
 
   accountSheet: $("accountSheet"),
   accountCancel: $("accountCancel"),
@@ -48,6 +51,8 @@ const els = {
 let records = [];
 let billingStartDay = 16;
 let accountName = "建行 AMEX";
+let viewYear = new Date().getFullYear();
+let viewMonth = new Date().getMonth() + 1;
 let selectedDate = new Date();
 let editingId = null;
 const today = new Date();
@@ -62,6 +67,8 @@ async function init() {
 
   billingStartDay = Number(await DB.getSetting("billingStartDay", 16));
   accountName = await DB.getSetting("accountName", "建行 AMEX");
+  viewYear = Number(await DB.getSetting("viewYear", today.getFullYear()));
+  viewMonth = Number(await DB.getSetting("viewMonth", today.getMonth() + 1));
   els.accountButton.textContent = accountName;
   els.billingStartDay.value = String(billingStartDay);
 
@@ -74,10 +81,15 @@ async function init() {
 
 function initStaticSelects() {
   const year = today.getFullYear();
-  els.dateYear.innerHTML = Array.from({ length: 9 }, (_, i) => year - 4 + i)
+  const yearOptions = Array.from({ length: 9 }, (_, i) => year - 4 + i)
     .map(y => `<option value="${y}">${y}年</option>`).join("");
-  els.dateMonth.innerHTML = Array.from({ length: 12 }, (_, i) => i + 1)
+  const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1)
     .map(m => `<option value="${m}">${m}月</option>`).join("");
+
+  els.dateYear.innerHTML = yearOptions;
+  els.dateMonth.innerHTML = monthOptions;
+  els.viewYear.innerHTML = yearOptions;
+  els.viewMonth.innerHTML = monthOptions;
   els.billingStartDay.innerHTML = Array.from({ length: 28 }, (_, i) => i + 1)
     .map(d => `<option value="${d}">每月 ${d} 日开始</option>`).join("");
 }
@@ -95,7 +107,10 @@ function initEvents() {
   els.dateMonth.addEventListener("change", () => refreshDayOptions());
   els.billingButton.addEventListener("click", openBillingSheet);
   els.billingCancel.addEventListener("click", closeBillingSheet);
-  els.billingDone.addEventListener("click", saveBillingStartDay);
+  els.billingDone.addEventListener("click", saveBillingSettings);
+  els.billingStartDay.addEventListener("change", updateBillingPreview);
+  els.viewYear.addEventListener("change", updateBillingPreview);
+  els.viewMonth.addEventListener("change", updateBillingPreview);
   els.exportButton.addEventListener("click", exportCSV);
   els.refreshButton.addEventListener("click", async () => { records = await DB.getAllRecords(); render(); showToast("已刷新"); });
   els.accountButton.addEventListener("click", openAccountSheet);
@@ -243,15 +258,29 @@ function updateDateButton() { els.dateButton.textContent = formatChineseDate(sel
 
 function openBillingSheet() {
   els.billingStartDay.value = String(billingStartDay);
+  els.viewYear.value = String(viewYear);
+  els.viewMonth.value = String(viewMonth);
+  updateBillingPreview();
   els.billingSheet.classList.remove("hidden");
 }
 function closeBillingSheet() { els.billingSheet.classList.add("hidden"); }
-async function saveBillingStartDay() {
+async function saveBillingSettings() {
   billingStartDay = Number(els.billingStartDay.value);
+  viewYear = Number(els.viewYear.value);
+  viewMonth = Number(els.viewMonth.value);
   await DB.setSetting("billingStartDay", billingStartDay);
+  await DB.setSetting("viewYear", viewYear);
+  await DB.setSetting("viewMonth", viewMonth);
   closeBillingSheet();
   render();
-  showToast(`账期已改为每月${billingStartDay}日开始`);
+  showToast(`正在查看 ${viewYear}年${viewMonth}月账期`);
+}
+function updateBillingPreview() {
+  const startDay = Number(els.billingStartDay.value || billingStartDay);
+  const y = Number(els.viewYear.value || viewYear);
+  const m = Number(els.viewMonth.value || viewMonth);
+  const cycle = getBillingCycleByMonth(y, m, startDay);
+  els.billingPreview.textContent = `${formatChineseDate(cycle.start)} ～ ${formatChineseDate(addDays(cycle.end, -1))}`;
 }
 
 function openAccountSheet() {
@@ -280,10 +309,10 @@ async function deleteRecord(id) {
 
 function render() {
   const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date) || (b.updatedAt || "").localeCompare(a.updatedAt || ""));
-  const now = new Date();
-  const cycle = getBillingCycle(now, billingStartDay);
-  const month = getNaturalMonth(now);
-  const year = getNaturalYear(now);
+  const viewDate = new Date(viewYear, viewMonth - 1, billingStartDay);
+  const cycle = getBillingCycleByMonth(viewYear, viewMonth, billingStartDay);
+  const month = getNaturalMonth(viewDate);
+  const year = getNaturalYear(viewDate);
 
   const cycleRecords = sorted.filter(r => inRange(parseDate(r.date), cycle.start, cycle.end));
   const monthRecords = sorted.filter(r => inRange(parseDate(r.date), month.start, month.end));
@@ -295,14 +324,14 @@ function render() {
   els.cycleRange.textContent = `${formatShort(cycle.start)} ~ ${formatShort(addDays(cycle.end, -1))}`;
   els.monthRange.textContent = `${formatShort(month.start)} ~ ${formatShort(addDays(month.end, -1))}`;
   els.yearRange.textContent = `${year.start.getFullYear()}年`;
-  els.billingLabel.textContent = `${billingStartDay}日开始`;
+  els.billingLabel.textContent = `${viewMonth}月 · ${billingStartDay}日`;
 
-  renderRecords(cycleRecords);
+  renderRecords(cycleRecords, cycle);
 }
 
-function renderRecords(list) {
+function renderRecords(list, cycle) {
   if (!list.length) {
-    els.recordsList.innerHTML = `<div class="empty"><div class="empty-icon">🧾</div><div>当前账期还没有记录</div><div>点下方 + 记一笔吧</div></div>`;
+    els.recordsList.innerHTML = `<div class="empty"><div class="empty-icon">🧾</div><div>${formatShort(cycle.start)} ~ ${formatShort(addDays(cycle.end, -1))} 没有记录</div><div>点下方 + 记一笔吧</div></div>`;
     return;
   }
 
@@ -343,6 +372,11 @@ function getBillingCycle(date, startDay) {
   const d = date.getDate();
   const start = d >= startDay ? new Date(y, m, startDay) : new Date(y, m - 1, startDay);
   const end = new Date(start.getFullYear(), start.getMonth() + 1, startDay);
+  return { start, end };
+}
+function getBillingCycleByMonth(year, month, startDay) {
+  const start = new Date(Number(year), Number(month) - 1, Number(startDay));
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, Number(startDay));
   return { start, end };
 }
 function getNaturalMonth(date) { return { start: new Date(date.getFullYear(), date.getMonth(), 1), end: new Date(date.getFullYear(), date.getMonth() + 1, 1) }; }

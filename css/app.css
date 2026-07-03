@@ -98,8 +98,8 @@ button { border: 0; cursor: pointer; }
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
 }
 .bottom-action.right { justify-content: flex-end; text-align: right; }
-.bottom-action strong { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
-.bottom-action small { display: block; color: var(--sub); font-size: 11px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
+.bottom-action strong { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
+.bottom-action small { display: block; color: var(--sub); font-size: 10.5px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
 .action-icon { width: 32px; height: 32px; border-radius: 12px; display: grid; place-items: center; color: var(--blue); background: rgba(10,132,255,.14); font-size: 18px; flex: 0 0 auto; }
 .fab {
   width: 76px; height: 76px; border-radius: 50%; color: #fff; font-size: 54px; line-height: 0;
@@ -157,4 +157,20 @@ button { border: 0; cursor: pointer; }
   .bottom-action strong { font-size: 13px; }
   .bottom-action small { font-size: 10px; }
   .action-icon { width: 30px; height: 30px; font-size: 16px; }
+}
+
+.billing-view-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.billing-preview {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  color: var(--sub);
+  background: rgba(255,255,255,.06);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 1.4;
 }

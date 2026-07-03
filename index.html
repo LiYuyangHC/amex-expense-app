@@ -126,10 +126,18 @@
       <div class="handle"></div>
       <div class="sheet-head">
         <button class="link" id="billingCancel" type="button">取消</button>
-        <strong>账期开始日</strong>
+        <strong>账期设置 / 查看</strong>
         <button class="link" id="billingDone" type="button">完成</button>
       </div>
+      <label>账期开始日</label>
       <select id="billingStartDay"></select>
+
+      <label>查看账期</label>
+      <div class="billing-view-grid">
+        <select id="viewYear"></select>
+        <select id="viewMonth"></select>
+      </div>
+      <div class="billing-preview" id="billingPreview">--</div>
     </section>
   </div>
 

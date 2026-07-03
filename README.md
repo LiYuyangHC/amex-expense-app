@@ -1,5 +1,3 @@
-# AMEX Expense App V2.1
+# amex-expense-app v2.2
 
-- Fix bottom bar text overflow
-- Connect existing May/June records into IndexedDB on first launch
-- Dark iOS-first local PWA
+新增账期查看：可选择任意年份/月的账期，同时保留账期开始日设置。
