@@ -10,20 +10,70 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="刷卡记账">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#061a2f">
+  <meta name="theme-color" content="#000000">
 </head>
 <body>
-  <main class="page">
-    <header class="hero">
-      <div class="eyebrow">建行 AMEX</div>
-      <h1>刷卡记账</h1>
-      <div class="subline" id="cycleLabel">当前账期</div>
+  <main class="app-shell">
+    <header class="topbar">
+      <button id="accountButton" class="account-pill" type="button">建行 AMEX</button>
     </header>
 
-    <section class="card form-card">
-      <div class="mode-row">
-        <span id="formTitle">记一笔</span>
-        <button class="link hidden" id="cancelEditButton">取消编辑</button>
+    <section class="stats-row" aria-label="统计">
+      <article class="stat-card">
+        <div class="stat-title">当前账期</div>
+        <div class="stat-number purple" id="cycleTotal">$0.00</div>
+        <div class="stat-range" id="cycleRange">--</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-title">自然月</div>
+        <div class="stat-number blue" id="monthTotal">$0.00</div>
+        <div class="stat-range" id="monthRange">--</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-title">自然年</div>
+        <div class="stat-number green" id="yearTotal">$0.00</div>
+        <div class="stat-range" id="yearRange">--</div>
+      </article>
+    </section>
+
+    <section class="records-section">
+      <div class="section-head">
+        <h1>账单记录</h1>
+        <button id="refreshButton" class="text-button" type="button">刷新</button>
+      </div>
+      <div class="records-card" id="recordsList"></div>
+    </section>
+  </main>
+
+  <nav class="bottom-bar" aria-label="底部操作">
+    <button id="billingButton" class="bottom-action" type="button">
+      <span class="action-icon">▣</span>
+      <span>
+        <strong>账期设置</strong>
+        <small id="billingLabel">每月16日开始</small>
+      </span>
+    </button>
+
+    <button id="addButton" class="fab" type="button" aria-label="新增花销">+</button>
+
+    <button id="exportButton" class="bottom-action right" type="button">
+      <span class="action-icon">⇩</span>
+      <span>
+        <strong>导出表格</strong>
+        <small>CSV 格式</small>
+      </span>
+    </button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="sheet-backdrop hidden" id="expenseSheet">
+    <section class="sheet expense-sheet">
+      <div class="handle"></div>
+      <div class="sheet-head">
+        <button class="link" id="expenseCancel" type="button">取消</button>
+        <strong id="sheetTitle">新增花销</strong>
+        <button class="link" id="expenseDone" type="button">保存</button>
       </div>
 
       <label>金额</label>
@@ -33,7 +83,7 @@
       </div>
 
       <label>日期</label>
-      <button class="field-button" id="dateButton" type="button">选择日期</button>
+      <button class="selector-button" id="dateButton" type="button">选择日期</button>
 
       <label>类别</label>
       <select id="category">
@@ -50,46 +100,12 @@
       <label>备注</label>
       <input id="note" type="text" placeholder="午餐 麦当劳">
 
-      <button class="primary" id="saveButton" type="button">保存记录</button>
-      <div class="msg" id="msg"></div>
+      <button id="deleteEditingButton" class="delete-button hidden" type="button">删除这条记录</button>
     </section>
-
-    <section class="card settings-card">
-      <div class="section-title">设置</div>
-      <label>账期开始日</label>
-      <select id="billingStartDay"></select>
-      <div class="hint">例如 16 日表示：每月 16 日 ～ 次月 15 日</div>
-    </section>
-
-    <section class="stats-grid">
-      <div class="card stat-card">
-        <div class="stat-title">当前账期</div>
-        <div class="stat-number purple" id="cycleTotal">$0.00</div>
-        <div class="stat-range" id="cycleRange"></div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-title">自然月</div>
-        <div class="stat-number blue" id="monthTotal">$0.00</div>
-        <div class="stat-range" id="monthRange"></div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-title">自然年</div>
-        <div class="stat-number green" id="yearTotal">$0.00</div>
-        <div class="stat-range" id="yearRange"></div>
-      </div>
-    </section>
-
-    <section class="card records-card">
-      <div class="records-head">
-        <span>账期记录</span>
-        <button class="link" id="exportButton" type="button">导出 CSV</button>
-      </div>
-      <div id="recordsList"></div>
-    </section>
-  </main>
+  </div>
 
   <div class="sheet-backdrop hidden" id="dateSheet">
-    <div class="sheet">
+    <section class="sheet">
       <div class="handle"></div>
       <div class="sheet-head">
         <button class="link" id="dateCancel" type="button">取消</button>
@@ -102,7 +118,31 @@
         <select id="dateDay"></select>
       </div>
       <button class="ghost" id="todayButton" type="button">今天</button>
-    </div>
+    </section>
+  </div>
+
+  <div class="sheet-backdrop hidden" id="billingSheet">
+    <section class="sheet">
+      <div class="handle"></div>
+      <div class="sheet-head">
+        <button class="link" id="billingCancel" type="button">取消</button>
+        <strong>账期开始日</strong>
+        <button class="link" id="billingDone" type="button">完成</button>
+      </div>
+      <select id="billingStartDay"></select>
+    </section>
+  </div>
+
+  <div class="sheet-backdrop hidden" id="accountSheet">
+    <section class="sheet">
+      <div class="handle"></div>
+      <div class="sheet-head">
+        <button class="link" id="accountCancel" type="button">取消</button>
+        <strong>账户名称</strong>
+        <button class="link" id="accountDone" type="button">完成</button>
+      </div>
+      <input id="accountNameInput" type="text" placeholder="建行 AMEX">
+    </section>
   </div>
 
   <script src="./js/db.js"></script>
