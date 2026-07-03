@@ -101,9 +101,9 @@ button { border: 0; cursor: pointer; }
 .record:active { background: rgba(255,255,255,.045); }
 .record-icon {
   width: 48px; height: 48px; display: grid; place-items: center; border-radius: 15px;
-  background: rgba(255,255,255,.07); font-size: 15px;
+  background: rgba(255,255,255,.07); font-size: 10px;
 }
-.record-title { font-size: 17px; font-weight: 780; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.record-title { font-size: 10px; font-weight: 780; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-sub { color: var(--sub); font-size: 13px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-amount { font-size: 17px; font-weight: 850; white-space: nowrap; text-align: right; }
 .empty { color: var(--sub); text-align: center; padding: 44px 18px; line-height: 1.65; }
