@@ -101,7 +101,7 @@ button { border: 0; cursor: pointer; }
 .record:active { background: rgba(255,255,255,.045); }
 .record-icon {
   width: 48px; height: 48px; display: grid; place-items: center; border-radius: 15px;
-  background: rgba(255,255,255,.07); font-size: 23px;
+  background: rgba(255,255,255,.07); font-size: 15px;
 }
 .record-title { font-size: 17px; font-weight: 780; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-sub { color: var(--sub); font-size: 13px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
