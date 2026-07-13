@@ -2,16 +2,16 @@ const $ = id => document.getElementById(id);
 
 const els = {
   accountButton: $("accountButton"),
-  cloudButton: $("cloudButton"),
-  syncStatus: $("syncStatus"),
+  profileButton: $("profileButton"),
   cycleTotal: $("cycleTotal"), monthTotal: $("monthTotal"), yearTotal: $("yearTotal"),
   cycleRange: $("cycleRange"), monthRange: $("monthRange"), yearRange: $("yearRange"),
   recordsList: $("recordsList"), refreshButton: $("refreshButton"),
   billingButton: $("billingButton"), billingLabel: $("billingLabel"),
   addButton: $("addButton"), exportButton: $("exportButton"), toast: $("toast"),
 
-  authSheet: $("authSheet"), authCancel: $("authCancel"), authSend: $("authSend"),
-  authSignOut: $("authSignOut"), authEmail: $("authEmail"), authMessage: $("authMessage"),
+  authSheet: $("authSheet"), authCancel: $("authCancel"), authGoogle: $("authGoogle"),
+  authRetrySync: $("authRetrySync"), authSignOut: $("authSignOut"),
+  authMessage: $("authMessage"), authHint: $("authHint"),
 
   expenseSheet: $("expenseSheet"), expenseCancel: $("expenseCancel"), expenseDone: $("expenseDone"),
   sheetTitle: $("sheetTitle"), amount: $("amount"), dateButton: $("dateButton"),
@@ -36,6 +36,7 @@ let viewMonth = new Date().getMonth() + 1;
 let selectedDate = new Date();
 let editingId = null;
 let lastSyncAt = null;
+let syncHealth = "idle";
 const today = new Date();
 
 init();
@@ -58,10 +59,15 @@ async function init() {
   registerServiceWorker();
 
   Cloud.init();
-  updateCloudStatus("checking");
   try {
     await Cloud.getSession();
-    Cloud.onAuthStateChange(async () => {
+    Cloud.onAuthStateChange(async (_event, _session, authError) => {
+      if (authError) {
+        syncHealth = "error";
+        updateAuthUI(authError.message);
+        openAuthSheet();
+        return;
+      }
       updateAuthUI();
       if (Cloud.isSignedIn()) await syncNow({ silent: true });
     });
@@ -69,7 +75,8 @@ async function init() {
     if (Cloud.isSignedIn()) await syncNow({ silent: true });
   } catch (error) {
     console.error(error);
-    updateCloudStatus(navigator.onLine ? "error" : "offline");
+    syncHealth = navigator.onLine ? "error" : "offline";
+    updateAuthUI(error.message);
   }
 }
 
@@ -115,9 +122,10 @@ function initEvents() {
   els.accountCancel.addEventListener("click", closeAccountSheet);
   els.accountDone.addEventListener("click", saveAccountName);
 
-  els.cloudButton.addEventListener("click", openAuthSheet);
+  els.profileButton.addEventListener("click", openAuthSheet);
   els.authCancel.addEventListener("click", closeAuthSheet);
-  els.authSend.addEventListener("click", sendLoginEmail);
+  els.authGoogle.addEventListener("click", signInGoogle);
+  els.authRetrySync.addEventListener("click", () => syncNow());
   els.authSignOut.addEventListener("click", signOutCloud);
 
   [els.expenseSheet, els.dateSheet, els.billingSheet, els.accountSheet, els.authSheet].forEach(backdrop => {
@@ -127,7 +135,7 @@ function initEvents() {
   });
 
   window.addEventListener("online", () => syncNow({ silent: true }));
-  window.addEventListener("offline", () => updateCloudStatus("offline"));
+  window.addEventListener("offline", () => { syncHealth = "offline"; updateAuthUI(); });
   window.addEventListener("focus", () => Cloud.isSignedIn() && syncNow({ silent: true }));
 }
 
@@ -172,6 +180,7 @@ async function normalizeLocalRecords() {
       accountName: record.accountName || accountName,
       createdAt: record.createdAt || record.updatedAt || new Date().toISOString(),
       updatedAt: record.updatedAt || new Date().toISOString(),
+      clientUpdatedAt: record.clientUpdatedAt || record.updatedAt || new Date().toISOString(),
       deleted: Boolean(record.deleted),
       syncState: record.syncState || "pending"
     };
@@ -223,6 +232,7 @@ async function saveRecord() {
     accountName,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
+    clientUpdatedAt: now,
     deleted: false,
     syncState: "pending"
   });
@@ -237,7 +247,8 @@ async function deleteRecord(id) {
   if (!confirm("确定删除这条记录吗？")) return;
   const existing = records.find(r => r.id === id);
   if (!existing) return;
-  await DB.saveRecord({ ...existing, deleted: true, updatedAt: new Date().toISOString(), syncState: "pending" });
+  const now = new Date().toISOString();
+  await DB.saveRecord({ ...existing, deleted: true, updatedAt: now, clientUpdatedAt: now, syncState: "pending" });
   records = await DB.getAllRecords();
   closeExpenseSheet();
   render();
@@ -317,42 +328,52 @@ async function saveAccountName() {
 function openAuthSheet() {
   updateAuthUI();
   els.authSheet.classList.remove("hidden");
-  if (!Cloud.isSignedIn()) setTimeout(() => els.authEmail.focus(), 120);
 }
 function closeAuthSheet() { els.authSheet.classList.add("hidden"); }
-function updateAuthUI() {
+function updateAuthUI(message = "") {
   const signedIn = Cloud.isSignedIn();
-  els.authEmail.classList.toggle("hidden", signedIn);
-  els.authSend.classList.toggle("hidden", signedIn);
+  els.authGoogle.classList.toggle("hidden", signedIn);
   els.authSignOut.classList.toggle("hidden", !signedIn);
-  els.authMessage.textContent = signedIn
-    ? `已登录：${Cloud.getUser()?.email || ""}`
-    : "登录后，所有设备会同步同一份账单。";
-  updateCloudStatus(signedIn ? "synced" : "signedOut");
+  els.authRetrySync.classList.toggle("hidden", !signedIn || syncHealth !== "error");
+  els.profileButton.dataset.state = syncHealth === "error" ? "error" : (signedIn ? "signed-in" : "signed-out");
+
+  if (message) {
+    els.authMessage.textContent = message;
+  } else if (signedIn) {
+    els.authMessage.textContent = `已登录：${Cloud.getUser()?.email || ""}`;
+  } else {
+    els.authMessage.textContent = "使用你的 Google Account 登录，账单会在后台安全同步。";
+  }
+
+  if (syncHealth === "error") {
+    els.authHint.textContent = "上次同步失败。本地账单仍然安全保存，可稍后重试。";
+  } else if (!navigator.onLine) {
+    els.authHint.textContent = "当前离线。你仍可正常记账，联网后会自动同步。";
+  } else if (signedIn && lastSyncAt) {
+    els.authHint.textContent = `最近同步：${lastSyncAt.toLocaleString("zh-CN")}`;
+  } else {
+    els.authHint.textContent = `仅允许 ${window.APP_CONFIG.ALLOWED_EMAIL} 使用此应用。`;
+  }
 }
-async function sendLoginEmail() {
-  const email = els.authEmail.value.trim();
-  if (!email || !email.includes("@")) return showToast("请输入正确邮箱");
-  els.authSend.disabled = true;
-  els.authSend.textContent = "发送中…";
+async function signInGoogle() {
+  els.authGoogle.disabled = true;
   try {
-    await Cloud.sendMagicLink(email);
-    els.authMessage.textContent = "登录邮件已发送。点击邮件里的链接后，再返回应用。";
-    showToast("登录邮件已发送");
+    await Cloud.signInWithGoogle();
   } catch (error) {
     console.error(error);
-    els.authMessage.textContent = error.message || "发送失败";
+    syncHealth = "error";
+    updateAuthUI(error.message || "Google 登录失败");
   } finally {
-    els.authSend.disabled = false;
-    els.authSend.textContent = "发送登录邮件";
+    els.authGoogle.disabled = false;
   }
 }
 async function signOutCloud() {
   try {
     await Cloud.signOut();
+    syncHealth = "idle";
     closeAuthSheet();
     updateAuthUI();
-    showToast("已退出云同步");
+    showToast("已退出登录");
   } catch (error) {
     showToast(error.message || "退出失败");
   }
@@ -360,17 +381,20 @@ async function signOutCloud() {
 
 async function syncNow({ silent = false } = {}) {
   if (!Cloud.isSignedIn()) {
-    updateCloudStatus(navigator.onLine ? "signedOut" : "offline");
+    syncHealth = navigator.onLine ? "idle" : "offline";
+    updateAuthUI();
     if (!silent) openAuthSheet();
     return;
   }
   if (!navigator.onLine) {
-    updateCloudStatus("offline");
-    if (!silent) showToast("当前离线，记录会稍后同步");
+    syncHealth = "offline";
+    updateAuthUI();
+    if (!silent) showToast("当前离线，本地记录已保存");
     return;
   }
   if (Cloud.isSyncing()) return;
-  updateCloudStatus("syncing");
+  syncHealth = "syncing";
+  updateAuthUI();
   try {
     await normalizeLocalRecords();
     records = await DB.getAllRecords();
@@ -379,7 +403,8 @@ async function syncNow({ silent = false } = {}) {
       accountName,
       billingStartDay,
       currency: "USD",
-      updatedAt: await DB.getSetting("settingsUpdatedAt", new Date(0).toISOString())
+      updatedAt: await DB.getSetting("settingsUpdatedAt", new Date(0).toISOString()),
+      clientUpdatedAt: await DB.getSetting("settingsUpdatedAt", new Date(0).toISOString())
     };
     const syncedSettings = await Cloud.syncSettings(localSettings);
     accountName = syncedSettings.accountName;
@@ -392,24 +417,15 @@ async function syncNow({ silent = false } = {}) {
     const result = await Cloud.syncRecords(records);
     records = result.records;
     lastSyncAt = new Date();
+    syncHealth = "healthy";
     render();
-    updateCloudStatus("synced");
-    if (!silent) showToast("云端已同步");
+    updateAuthUI();
   } catch (error) {
     console.error(error);
-    updateCloudStatus("error");
-    if (!silent) showToast(error.message || "同步失败");
+    syncHealth = "error";
+    updateAuthUI(error.message || "同步失败");
+    if (!silent) showToast("同步失败，本地数据未丢失");
   }
-}
-
-function updateCloudStatus(state) {
-  const text = {
-    checking: "检查同步…", syncing: "正在同步…", synced: lastSyncAt ? "已同步 · 刚刚" : "已同步",
-    signedOut: "登录以同步", offline: "离线 · 待联网", error: "同步失败 · 点此重试"
-  }[state] || "登录以同步";
-  els.syncStatus.textContent = text;
-  els.cloudButton.dataset.state = state;
-  els.cloudButton.onclick = state === "error" ? () => syncNow() : openAuthSheet;
 }
 
 function render() {

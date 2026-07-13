@@ -17,8 +17,8 @@
     <header class="topbar">
       <div class="topbar-stack">
         <button id="accountButton" class="account-pill" type="button">建行 AMEX</button>
-        <button id="cloudButton" class="cloud-status" type="button" data-state="checking">
-          <span class="cloud-dot"></span><span id="syncStatus">检查同步…</span>
+        <button id="profileButton" class="profile-button" type="button" aria-label="个人账户">
+          <span aria-hidden="true">●</span>
         </button>
       </div>
     </header>
@@ -154,12 +154,15 @@
         <strong>云端同步</strong>
         <span class="sheet-spacer"></span>
       </div>
-      <div class="auth-icon">☁️</div>
-      <p class="auth-message" id="authMessage">登录后，所有设备会同步同一份账单。</p>
-      <input id="authEmail" type="email" inputmode="email" autocomplete="email" placeholder="你的邮箱">
-      <button class="primary-sheet-button" id="authSend" type="button">发送登录邮件</button>
-      <button class="delete-button hidden" id="authSignOut" type="button">退出云同步</button>
-      <p class="auth-hint">登录链接会发送到邮箱。点击后返回此应用即可开始同步。</p>
+      <div class="auth-icon">◉</div>
+      <p class="auth-message" id="authMessage">使用你的 Google Account 登录，账单会在后台安全同步。</p>
+      <button class="google-button" id="authGoogle" type="button">
+        <span class="google-mark">G</span>
+        <span>使用 Google 登录</span>
+      </button>
+      <button class="secondary-sheet-button hidden" id="authRetrySync" type="button">重新同步</button>
+      <button class="delete-button hidden" id="authSignOut" type="button">退出登录</button>
+      <p class="auth-hint" id="authHint">仅允许指定的个人 Google Account 使用此应用。</p>
     </section>
   </div>
 
