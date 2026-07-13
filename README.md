@@ -1,3 +1,9 @@
-# amex-expense-app v2.4
+# AMEX Expense App V3.0
 
-Fixes: adaptive stat numbers and dark full-width record list styling.
+GitHub Pages PWA with IndexedDB local-first storage and Supabase multi-device cloud sync.
+
+## Login
+Tap the sync status under the account name, enter your email, and open the Supabase login link.
+
+## Safety
+Only the Supabase publishable key is included in the frontend. Row Level Security protects each user's data.

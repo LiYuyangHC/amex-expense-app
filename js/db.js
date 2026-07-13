@@ -1,5 +1,5 @@
 const DB_NAME = "amex-expense-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_RECORDS = "records";
 const STORE_SETTINGS = "settings";
 
@@ -22,7 +22,7 @@ function openDB() {
   });
 }
 
-async function tx(storeName, mode, callback) {
+async function runTx(storeName, mode, work) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, mode);
@@ -30,36 +30,54 @@ async function tx(storeName, mode, callback) {
     let result;
     transaction.oncomplete = () => resolve(result);
     transaction.onerror = () => reject(transaction.error);
-    result = callback(store);
+    transaction.onabort = () => reject(transaction.error || new Error("Database transaction aborted"));
+    result = work(store);
+  });
+}
+
+function requestPromise(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
 }
 
 const DB = {
   async getAllRecords() {
-    return tx(STORE_RECORDS, "readonly", store => new Promise((resolve, reject) => {
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    }));
+    return runTx(STORE_RECORDS, "readonly", store => requestPromise(store.getAll()).then(v => v || []));
+  },
+
+  async getRecord(id) {
+    return runTx(STORE_RECORDS, "readonly", store => requestPromise(store.get(id)));
   },
 
   async saveRecord(record) {
-    return tx(STORE_RECORDS, "readwrite", store => store.put(record));
+    return runTx(STORE_RECORDS, "readwrite", store => store.put(record));
   },
 
-  async deleteRecord(id) {
-    return tx(STORE_RECORDS, "readwrite", store => store.delete(id));
+  async saveRecords(records) {
+    if (!records.length) return;
+    return runTx(STORE_RECORDS, "readwrite", store => {
+      records.forEach(record => store.put(record));
+    });
+  },
+
+  async deleteRecordPermanently(id) {
+    return runTx(STORE_RECORDS, "readwrite", store => store.delete(id));
+  },
+
+  async replaceRecordId(oldId, record) {
+    return runTx(STORE_RECORDS, "readwrite", store => {
+      store.delete(oldId);
+      store.put(record);
+    });
   },
 
   async getSetting(key, fallback) {
-    return tx(STORE_SETTINGS, "readonly", store => new Promise((resolve, reject) => {
-      const req = store.get(key);
-      req.onsuccess = () => resolve(req.result ? req.result.value : fallback);
-      req.onerror = () => reject(req.error);
-    }));
+    return runTx(STORE_SETTINGS, "readonly", store => requestPromise(store.get(key)).then(v => v ? v.value : fallback));
   },
 
   async setSetting(key, value) {
-    return tx(STORE_SETTINGS, "readwrite", store => store.put({ key, value }));
+    return runTx(STORE_SETTINGS, "readwrite", store => store.put({ key, value }));
   }
 };

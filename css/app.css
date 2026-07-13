@@ -82,12 +82,12 @@ button { border: 0; cursor: pointer; }
 }
 .record {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 50px minmax(0, 1fr) auto 16px;
   gap: 12px;
   align-items: center;
   width: 100%;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 16px 15px;
   border: 0;
   border-top: 1px solid var(--line);
   border-radius: 0;
@@ -97,54 +97,30 @@ button { border: 0; cursor: pointer; }
   appearance: none;
   -webkit-appearance: none;
 }
-
 .record:first-child { border-top: 0; }
-
-.record:active {
-  background: rgba(255,255,255,.045);
-}
-
+.record:active { background: rgba(255,255,255,.045); }
 .record-icon {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 14px;
   background: rgba(255,255,255,.07);
-  font-size: 18px;
-  line-height: 1;
-  flex-shrink: 0;
+  font-size: 22px;
+  flex: 0 0 auto;
 }
-
-.record-body {
-  min-width: 0;
-}
-
-.record-title {
-  font-size: 16.5px;
-  font-weight: 760;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.2;
-}
-
-.record-sub {
-  color: var(--sub);
-  font-size: 12.5px;
-  margin-top: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.record-amount {
-  font-size: 16px;
-  font-weight: 850;
-  white-space: nowrap;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
+.record-icon.food { background: rgba(191,90,242,.18); }
+.record-icon.grocery { background: rgba(48,209,88,.16); }
+.record-icon.transport { background: rgba(10,132,255,.16); }
+.record-icon.entertainment { background: rgba(255,55,95,.15); }
+.record-icon.study { background: rgba(100,210,255,.15); }
+.record-icon.rent { background: rgba(255,159,10,.16); }
+.record-icon.shopping { background: rgba(48,209,88,.15); }
+.record-icon.other { background: rgba(142,142,147,.14); }
+.record-title { font-size: 17px; font-weight: 780; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.record-sub { color: var(--sub); font-size: 13px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.record-amount { font-size: 17px; font-weight: 850; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.record-chevron { color: #6f747c; font-size: 26px; line-height: 1; justify-self: end; }
 .empty { color: var(--sub); text-align: center; padding: 44px 18px; line-height: 1.65; }
 .empty-icon { font-size: 40px; opacity: .75; margin-bottom: 8px; }
 
@@ -240,3 +216,30 @@ button { border: 0; cursor: pointer; }
   font-size: 14px;
   line-height: 1.4;
 }
+
+.topbar-stack { display: grid; justify-items: center; gap: 2px; }
+.cloud-status {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: 28px; padding: 4px 10px; border-radius: 999px;
+  color: var(--sub); background: transparent; font-size: 12px; font-weight: 720;
+}
+.cloud-status:active { background: rgba(255,255,255,.06); }
+.cloud-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sub); box-shadow: 0 0 0 3px rgba(142,142,147,.12); }
+.cloud-status[data-state="synced"] .cloud-dot { background: var(--green); box-shadow: 0 0 0 3px rgba(48,209,88,.13); }
+.cloud-status[data-state="syncing"] .cloud-dot,
+.cloud-status[data-state="checking"] .cloud-dot { background: var(--blue); animation: cloudPulse 1s ease-in-out infinite; }
+.cloud-status[data-state="offline"] .cloud-dot { background: var(--orange); }
+.cloud-status[data-state="error"] .cloud-dot { background: var(--red); }
+@keyframes cloudPulse { 50% { opacity: .35; transform: scale(.8); } }
+
+.sheet-spacer { width: 48px; }
+.auth-sheet { text-align: center; }
+.auth-icon { font-size: 48px; margin: 4px 0 8px; }
+.auth-message { color: var(--text); font-size: 16px; line-height: 1.5; margin: 0 8px 18px; }
+.auth-hint { color: var(--sub); font-size: 12px; line-height: 1.5; margin: 14px 10px 2px; }
+.primary-sheet-button {
+  width: 100%; height: 54px; margin-top: 14px; border-radius: 17px;
+  background: var(--primary); color: #fff; font-size: 17px; font-weight: 850;
+  box-shadow: 0 10px 24px rgba(10,132,255,.24);
+}
+.primary-sheet-button:disabled { opacity: .55; }

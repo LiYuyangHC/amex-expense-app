@@ -2,50 +2,30 @@ const $ = id => document.getElementById(id);
 
 const els = {
   accountButton: $("accountButton"),
-  cycleTotal: $("cycleTotal"),
-  monthTotal: $("monthTotal"),
-  yearTotal: $("yearTotal"),
-  cycleRange: $("cycleRange"),
-  monthRange: $("monthRange"),
-  yearRange: $("yearRange"),
-  recordsList: $("recordsList"),
-  refreshButton: $("refreshButton"),
-  billingButton: $("billingButton"),
-  billingLabel: $("billingLabel"),
-  addButton: $("addButton"),
-  exportButton: $("exportButton"),
-  toast: $("toast"),
+  cloudButton: $("cloudButton"),
+  syncStatus: $("syncStatus"),
+  cycleTotal: $("cycleTotal"), monthTotal: $("monthTotal"), yearTotal: $("yearTotal"),
+  cycleRange: $("cycleRange"), monthRange: $("monthRange"), yearRange: $("yearRange"),
+  recordsList: $("recordsList"), refreshButton: $("refreshButton"),
+  billingButton: $("billingButton"), billingLabel: $("billingLabel"),
+  addButton: $("addButton"), exportButton: $("exportButton"), toast: $("toast"),
 
-  expenseSheet: $("expenseSheet"),
-  expenseCancel: $("expenseCancel"),
-  expenseDone: $("expenseDone"),
-  sheetTitle: $("sheetTitle"),
-  amount: $("amount"),
-  dateButton: $("dateButton"),
-  category: $("category"),
-  note: $("note"),
-  deleteEditingButton: $("deleteEditingButton"),
+  authSheet: $("authSheet"), authCancel: $("authCancel"), authSend: $("authSend"),
+  authSignOut: $("authSignOut"), authEmail: $("authEmail"), authMessage: $("authMessage"),
 
-  dateSheet: $("dateSheet"),
-  dateCancel: $("dateCancel"),
-  dateDone: $("dateDone"),
-  todayButton: $("todayButton"),
-  dateYear: $("dateYear"),
-  dateMonth: $("dateMonth"),
-  dateDay: $("dateDay"),
+  expenseSheet: $("expenseSheet"), expenseCancel: $("expenseCancel"), expenseDone: $("expenseDone"),
+  sheetTitle: $("sheetTitle"), amount: $("amount"), dateButton: $("dateButton"),
+  category: $("category"), note: $("note"), deleteEditingButton: $("deleteEditingButton"),
 
-  billingSheet: $("billingSheet"),
-  billingCancel: $("billingCancel"),
-  billingDone: $("billingDone"),
-  billingStartDay: $("billingStartDay"),
-  viewYear: $("viewYear"),
-  viewMonth: $("viewMonth"),
+  dateSheet: $("dateSheet"), dateCancel: $("dateCancel"), dateDone: $("dateDone"),
+  todayButton: $("todayButton"), dateYear: $("dateYear"), dateMonth: $("dateMonth"), dateDay: $("dateDay"),
+
+  billingSheet: $("billingSheet"), billingCancel: $("billingCancel"), billingDone: $("billingDone"),
+  billingStartDay: $("billingStartDay"), viewYear: $("viewYear"), viewMonth: $("viewMonth"),
   billingPreview: $("billingPreview"),
 
-  accountSheet: $("accountSheet"),
-  accountCancel: $("accountCancel"),
-  accountDone: $("accountDone"),
-  accountNameInput: $("accountNameInput")
+  accountSheet: $("accountSheet"), accountCancel: $("accountCancel"),
+  accountDone: $("accountDone"), accountNameInput: $("accountNameInput")
 };
 
 let records = [];
@@ -55,6 +35,7 @@ let viewYear = new Date().getFullYear();
 let viewMonth = new Date().getMonth() + 1;
 let selectedDate = new Date();
 let editingId = null;
+let lastSyncAt = null;
 const today = new Date();
 
 init();
@@ -62,7 +43,6 @@ init();
 async function init() {
   initStaticSelects();
   initEvents();
-  selectedDate = new Date();
   updateDateButton();
 
   billingStartDay = Number(await DB.getSetting("billingStartDay", 16));
@@ -70,18 +50,32 @@ async function init() {
   viewYear = Number(await DB.getSetting("viewYear", today.getFullYear()));
   viewMonth = Number(await DB.getSetting("viewMonth", today.getMonth() + 1));
   els.accountButton.textContent = accountName;
-  els.billingStartDay.value = String(billingStartDay);
 
   records = await DB.getAllRecords();
-  await seedExistingRecordsOnce();
+  await normalizeLocalRecords();
   records = await DB.getAllRecords();
   render();
   registerServiceWorker();
+
+  Cloud.init();
+  updateCloudStatus("checking");
+  try {
+    await Cloud.getSession();
+    Cloud.onAuthStateChange(async () => {
+      updateAuthUI();
+      if (Cloud.isSignedIn()) await syncNow({ silent: true });
+    });
+    updateAuthUI();
+    if (Cloud.isSignedIn()) await syncNow({ silent: true });
+  } catch (error) {
+    console.error(error);
+    updateCloudStatus(navigator.onLine ? "error" : "offline");
+  }
 }
 
 function initStaticSelects() {
-  const year = today.getFullYear();
-  const yearOptions = Array.from({ length: 9 }, (_, i) => year - 4 + i)
+  const currentYear = today.getFullYear();
+  const yearOptions = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i)
     .map(y => `<option value="${y}">${y}年</option>`).join("");
   const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1)
     .map(m => `<option value="${m}">${m}月</option>`).join("");
@@ -99,101 +93,112 @@ function initEvents() {
   els.expenseCancel.addEventListener("click", closeExpenseSheet);
   els.expenseDone.addEventListener("click", saveRecord);
   els.deleteEditingButton.addEventListener("click", () => editingId && deleteRecord(editingId));
+
   els.dateButton.addEventListener("click", openDateSheet);
   els.dateCancel.addEventListener("click", closeDateSheet);
   els.dateDone.addEventListener("click", confirmDate);
   els.todayButton.addEventListener("click", () => { setSelectedDate(new Date()); closeDateSheet(); });
   els.dateYear.addEventListener("change", () => refreshDayOptions());
   els.dateMonth.addEventListener("change", () => refreshDayOptions());
+
   els.billingButton.addEventListener("click", openBillingSheet);
   els.billingCancel.addEventListener("click", closeBillingSheet);
   els.billingDone.addEventListener("click", saveBillingSettings);
   els.billingStartDay.addEventListener("change", updateBillingPreview);
   els.viewYear.addEventListener("change", updateBillingPreview);
   els.viewMonth.addEventListener("change", updateBillingPreview);
+
   els.exportButton.addEventListener("click", exportCSV);
-  els.refreshButton.addEventListener("click", async () => { records = await DB.getAllRecords(); render(); showToast("已刷新"); });
+  els.refreshButton.addEventListener("click", () => syncNow());
+
   els.accountButton.addEventListener("click", openAccountSheet);
   els.accountCancel.addEventListener("click", closeAccountSheet);
   els.accountDone.addEventListener("click", saveAccountName);
 
-  [els.expenseSheet, els.dateSheet, els.billingSheet, els.accountSheet].forEach(backdrop => {
-    backdrop.addEventListener("click", e => { if (e.target === backdrop) backdrop.classList.add("hidden"); });
-  });
-}
+  els.cloudButton.addEventListener("click", openAuthSheet);
+  els.authCancel.addEventListener("click", closeAuthSheet);
+  els.authSend.addEventListener("click", sendLoginEmail);
+  els.authSignOut.addEventListener("click", signOutCloud);
 
+  [els.expenseSheet, els.dateSheet, els.billingSheet, els.accountSheet, els.authSheet].forEach(backdrop => {
+    backdrop.addEventListener("click", event => {
+      if (event.target === backdrop) backdrop.classList.add("hidden");
+    });
+  });
+
+  window.addEventListener("online", () => syncNow({ silent: true }));
+  window.addEventListener("offline", () => updateCloudStatus("offline"));
+  window.addEventListener("focus", () => Cloud.isSignedIn() && syncNow({ silent: true }));
+}
 
 async function seedExistingRecordsOnce() {
   const done = await DB.getSetting("seededExistingRecordsV1", false);
   if (done) return;
-
-  const existingIds = new Set(records.map(r => r.id));
   const now = new Date().toISOString();
-  const existingRecords = [
-    { id:"legacy_20260630_1928", date:"2026-06-30", category:"🍜餐饮", amount:19.28, note:"午餐" },
-    { id:"legacy_20260627_106", date:"2026-06-27", category:"🍜餐饮", amount:106, note:"晚餐" },
-    { id:"legacy_20260627_5", date:"2026-06-27", category:"🎁购物", amount:5, note:"头绳" },
-    { id:"legacy_20260627_50", date:"2026-06-27", category:"🚗交通", amount:50, note:"换驾照" },
-    { id:"legacy_20260626_328", date:"2026-06-26", category:"🍜餐饮", amount:32.8, note:"晚餐 tqco" },
-    { id:"legacy_20260624_68", date:"2026-06-24", category:"🍜餐饮", amount:68, note:"晚餐 咖喱饭" },
-    { id:"legacy_20260623_44", date:"2026-06-23", category:"🎁购物", amount:44, note:"发膜" },
-    { id:"legacy_20260622_178", date:"2026-06-22", category:"🎁购物", amount:178, note:"移动硬盘" },
-    { id:"legacy_20260622_100", date:"2026-06-22", category:"🍜餐饮", amount:100, note:"午餐" },
-    { id:"legacy_20260621_12612", date:"2026-06-21", category:"🍜餐饮", amount:126.12, note:"晚餐" },
-    { id:"legacy_20260618_6864", date:"2026-06-18", category:"🎁购物", amount:68.64, note:"眼霜" },
-    { id:"legacy_20260616_98", date:"2026-06-16", category:"🚗交通", amount:98, note:"Uber 回波士顿" },
-    { id:"legacy_20260615_150", date:"2026-06-15", category:"🛒买菜", amount:150, note:"Trader Joe's" },
-    { id:"legacy_20260606_9", date:"2026-06-06", category:"🎁购物", amount:9, note:"扫把" },
-    { id:"legacy_20260603_1550", date:"2026-06-03", category:"🏠房租", amount:1550, note:"房租" },
-    { id:"legacy_20260601_85", date:"2026-06-01", category:"🎁购物", amount:8.5, note:"花" },
-    { id:"legacy_20260529_21661", date:"2026-05-29", category:"🛒买菜", amount:216.61, note:"Costco" },
-    { id:"legacy_20260528_60", date:"2026-05-28", category:"🍜餐饮", amount:60, note:"生煎" },
-    { id:"legacy_20260527_14", date:"2026-05-27", category:"🎁购物", amount:14, note:"冲鼻器" },
-    { id:"legacy_20260527_7202", date:"2026-05-27", category:"🍜餐饮", amount:72.02, note:"晚餐" },
-    { id:"legacy_20260526_8418", date:"2026-05-26", category:"🎁购物", amount:84.18, note:"柜子" },
-    { id:"legacy_20260521_16962", date:"2026-05-21", category:"🏠房租", amount:169.62, note:"电费" },
-    { id:"legacy_20260521_39", date:"2026-05-21", category:"🛒买菜", amount:39, note:"买菜" },
-    { id:"legacy_20260518_138", date:"2026-05-18", category:"🍜餐饮", amount:138, note:"Eva" },
-    { id:"legacy_20260518_5674", date:"2026-05-18", category:"🛒买菜", amount:56.74, note:"Trader Joe's" },
-    { id:"legacy_20260516_69", date:"2026-05-16", category:"🍜餐饮", amount:6.9, note:"星巴克" },
-    { id:"legacy_20260515_3124", date:"2026-05-15", category:"🍜餐饮", amount:31.24, note:"麦当劳" },
-    { id:"legacy_20260515_213", date:"2026-05-15", category:"🍜餐饮", amount:21.3, note:"面包" },
-    { id:"legacy_20260513_89", date:"2026-05-13", category:"🛒买菜", amount:89, note:"买菜" },
-    { id:"legacy_20260513_12842", date:"2026-05-13", category:"🛒买菜", amount:128.42, note:"买菜" },
-    { id:"legacy_20260505_93", date:"2026-05-05", category:"🛒买菜", amount:93, note:"买菜" },
-    { id:"legacy_20260503_1500", date:"2026-05-03", category:"🏠房租", amount:1500, note:"房租" },
-    { id:"legacy_20260502_8244", date:"2026-05-02", category:"🍜餐饮", amount:82.44, note:"餐饮" }
+  const rows = [
+    ["2026-06-30","🍜餐饮",19.28,"午餐"],["2026-06-27","🍜餐饮",106,"晚餐"],
+    ["2026-06-27","🎁购物",5,"头绳"],["2026-06-27","🚗交通",50,"换驾照"],
+    ["2026-06-26","🍜餐饮",32.8,"晚餐 tqco"],["2026-06-24","🍜餐饮",68,"晚餐 咖喱饭"],
+    ["2026-06-23","🎁购物",44,"发膜"],["2026-06-22","🎁购物",178,"移动硬盘"],
+    ["2026-06-22","🍜餐饮",100,"午餐"],["2026-06-21","🍜餐饮",126.12,"晚餐"],
+    ["2026-06-18","🎁购物",68.64,"眼霜"],["2026-06-16","🚗交通",98,"Uber 回波士顿"],
+    ["2026-06-15","🛒买菜",150,"Trader Joe's"],["2026-06-06","🎁购物",9,"扫把"],
+    ["2026-06-03","🏠房租",1550,"房租"],["2026-06-01","🎁购物",8.5,"花"],
+    ["2026-05-29","🛒买菜",216.61,"Costco"],["2026-05-28","🍜餐饮",60,"生煎"],
+    ["2026-05-27","🎁购物",14,"冲鼻器"],["2026-05-27","🍜餐饮",72.02,"晚餐"],
+    ["2026-05-26","🎁购物",84.18,"柜子"],["2026-05-21","🏠房租",169.62,"电费"],
+    ["2026-05-21","🛒买菜",39,"买菜"],["2026-05-18","🍜餐饮",138,"Eva"],
+    ["2026-05-18","🛒买菜",56.74,"Trader Joe's"],["2026-05-16","🍜餐饮",6.9,"星巴克"],
+    ["2026-05-15","🍜餐饮",31.24,"麦当劳"],["2026-05-15","🍜餐饮",21.3,"面包"],
+    ["2026-05-13","🛒买菜",89,"买菜"],["2026-05-13","🛒买菜",128.42,"买菜"],
+    ["2026-05-05","🛒买菜",93,"买菜"],["2026-05-03","🏠房租",1500,"房租"],
+    ["2026-05-02","🍜餐饮",82.44,"餐饮"]
   ];
-
-  let added = 0;
-  for (const record of existingRecords) {
-    if (existingIds.has(record.id)) continue;
+  for (const [date, category, amount, note] of rows) {
     await DB.saveRecord({
-      ...record,
-      createdAt: now,
-      updatedAt: now
+      id: makeId(), date, category, amount, note, accountName,
+      createdAt: now, updatedAt: now, deleted: false, syncState: "pending"
     });
-    added++;
   }
   await DB.setSetting("seededExistingRecordsV1", true);
-  if (added > 0) setTimeout(() => showToast(`已连接 ${added} 条历史记录`), 400);
+  showToast(`已连接 ${rows.length} 条历史记录`);
 }
 
-function openExpenseSheet(record) {
+async function normalizeLocalRecords() {
+  const local = await DB.getAllRecords();
+  for (const record of local) {
+    const normalized = {
+      ...record,
+      accountName: record.accountName || accountName,
+      createdAt: record.createdAt || record.updatedAt || new Date().toISOString(),
+      updatedAt: record.updatedAt || new Date().toISOString(),
+      deleted: Boolean(record.deleted),
+      syncState: record.syncState || "pending"
+    };
+    if (!isUuid(record.id)) {
+      normalized.id = makeId();
+      await DB.replaceRecordId(record.id, normalized);
+    } else if (JSON.stringify(record) !== JSON.stringify(normalized)) {
+      await DB.saveRecord(normalized);
+    }
+  }
+}
+
+function openExpenseSheet(record = null) {
   editingId = record?.id || null;
   els.sheetTitle.textContent = editingId ? "编辑花销" : "新增花销";
   els.expenseDone.textContent = editingId ? "更新" : "保存";
   els.deleteEditingButton.classList.toggle("hidden", !editingId);
-
   if (record) {
     els.amount.value = record.amount;
     els.category.value = record.category;
     els.note.value = record.note || "";
     setSelectedDate(parseDate(record.date));
   } else {
-    clearExpenseForm(false);
+    els.amount.value = "";
+    els.note.value = "";
+    setSelectedDate(new Date());
   }
-
   els.expenseSheet.classList.remove("hidden");
   setTimeout(() => els.amount.focus(), 120);
 }
@@ -203,35 +208,41 @@ function closeExpenseSheet() {
   editingId = null;
 }
 
-function clearExpenseForm(resetDate = true) {
-  els.amount.value = "";
-  els.note.value = "";
-  if (resetDate) setSelectedDate(new Date());
-  else updateDateButton();
-}
-
 async function saveRecord() {
   const amount = Number(els.amount.value);
-  if (!els.amount.value || isNaN(amount) || amount <= 0) return showToast("先填金额哦");
-
+  if (!els.amount.value || !Number.isFinite(amount) || amount <= 0) return showToast("先填金额哦");
   const now = new Date().toISOString();
   const existing = editingId ? records.find(r => r.id === editingId) : null;
-  const record = {
+  const wasEditing = Boolean(editingId);
+  await DB.saveRecord({
     id: editingId || makeId(),
     date: formatLocalDate(selectedDate),
     category: els.category.value,
     amount,
     note: els.note.value.trim(),
+    accountName,
+    createdAt: existing?.createdAt || now,
     updatedAt: now,
-    createdAt: existing?.createdAt || now
-  };
-
-  await DB.saveRecord(record);
+    deleted: false,
+    syncState: "pending"
+  });
   records = await DB.getAllRecords();
   closeExpenseSheet();
   render();
-  showToast(editingId ? "已更新" : "已保存");
-  editingId = null;
+  showToast(wasEditing ? "已更新" : "已保存");
+  syncNow({ silent: true });
+}
+
+async function deleteRecord(id) {
+  if (!confirm("确定删除这条记录吗？")) return;
+  const existing = records.find(r => r.id === id);
+  if (!existing) return;
+  await DB.saveRecord({ ...existing, deleted: true, updatedAt: new Date().toISOString(), syncState: "pending" });
+  records = await DB.getAllRecords();
+  closeExpenseSheet();
+  render();
+  showToast("已删除");
+  syncNow({ silent: true });
 }
 
 function openDateSheet() {
@@ -246,7 +257,7 @@ function refreshDayOptions(preferredDay) {
   const m = Number(els.dateMonth.value);
   const days = new Date(y, m, 0).getDate();
   const current = preferredDay || Math.min(Number(els.dateDay.value || 1), days);
-  els.dateDay.innerHTML = Array.from({ length: days }, (_, i) => `<option value="${i+1}">${i+1}日</option>`).join("");
+  els.dateDay.innerHTML = Array.from({ length: days }, (_, i) => `<option value="${i + 1}">${i + 1}日</option>`).join("");
   els.dateDay.value = String(current);
 }
 function confirmDate() {
@@ -268,18 +279,21 @@ async function saveBillingSettings() {
   billingStartDay = Number(els.billingStartDay.value);
   viewYear = Number(els.viewYear.value);
   viewMonth = Number(els.viewMonth.value);
+  const updatedAt = new Date().toISOString();
   await DB.setSetting("billingStartDay", billingStartDay);
   await DB.setSetting("viewYear", viewYear);
   await DB.setSetting("viewMonth", viewMonth);
+  await DB.setSetting("settingsUpdatedAt", updatedAt);
   closeBillingSheet();
   render();
   showToast(`正在查看 ${viewYear}年${viewMonth}月账期`);
+  syncNow({ silent: true });
 }
 function updateBillingPreview() {
   const startDay = Number(els.billingStartDay.value || billingStartDay);
-  const y = Number(els.viewYear.value || viewYear);
-  const m = Number(els.viewMonth.value || viewMonth);
-  const cycle = getBillingCycleByMonth(y, m, startDay);
+  const year = Number(els.viewYear.value || viewYear);
+  const month = Number(els.viewMonth.value || viewMonth);
+  const cycle = getBillingCycleByMonth(year, month, startDay);
   els.billingPreview.textContent = `${formatChineseDate(cycle.start)} ～ ${formatChineseDate(addDays(cycle.end, -1))}`;
 }
 
@@ -290,30 +304,121 @@ function openAccountSheet() {
 }
 function closeAccountSheet() { els.accountSheet.classList.add("hidden"); }
 async function saveAccountName() {
-  const value = els.accountNameInput.value.trim() || "建行 AMEX";
-  accountName = value;
-  await DB.setSetting("accountName", value);
-  els.accountButton.textContent = value;
+  accountName = els.accountNameInput.value.trim() || "建行 AMEX";
+  const updatedAt = new Date().toISOString();
+  await DB.setSetting("accountName", accountName);
+  await DB.setSetting("settingsUpdatedAt", updatedAt);
+  els.accountButton.textContent = accountName;
   closeAccountSheet();
   showToast("名称已更新");
+  syncNow({ silent: true });
 }
 
-async function deleteRecord(id) {
-  if (!confirm("确定删除这条记录吗？")) return;
-  await DB.deleteRecord(id);
-  records = await DB.getAllRecords();
-  closeExpenseSheet();
-  render();
-  showToast("已删除");
+function openAuthSheet() {
+  updateAuthUI();
+  els.authSheet.classList.remove("hidden");
+  if (!Cloud.isSignedIn()) setTimeout(() => els.authEmail.focus(), 120);
+}
+function closeAuthSheet() { els.authSheet.classList.add("hidden"); }
+function updateAuthUI() {
+  const signedIn = Cloud.isSignedIn();
+  els.authEmail.classList.toggle("hidden", signedIn);
+  els.authSend.classList.toggle("hidden", signedIn);
+  els.authSignOut.classList.toggle("hidden", !signedIn);
+  els.authMessage.textContent = signedIn
+    ? `已登录：${Cloud.getUser()?.email || ""}`
+    : "登录后，所有设备会同步同一份账单。";
+  updateCloudStatus(signedIn ? "synced" : "signedOut");
+}
+async function sendLoginEmail() {
+  const email = els.authEmail.value.trim();
+  if (!email || !email.includes("@")) return showToast("请输入正确邮箱");
+  els.authSend.disabled = true;
+  els.authSend.textContent = "发送中…";
+  try {
+    await Cloud.sendMagicLink(email);
+    els.authMessage.textContent = "登录邮件已发送。点击邮件里的链接后，再返回应用。";
+    showToast("登录邮件已发送");
+  } catch (error) {
+    console.error(error);
+    els.authMessage.textContent = error.message || "发送失败";
+  } finally {
+    els.authSend.disabled = false;
+    els.authSend.textContent = "发送登录邮件";
+  }
+}
+async function signOutCloud() {
+  try {
+    await Cloud.signOut();
+    closeAuthSheet();
+    updateAuthUI();
+    showToast("已退出云同步");
+  } catch (error) {
+    showToast(error.message || "退出失败");
+  }
+}
+
+async function syncNow({ silent = false } = {}) {
+  if (!Cloud.isSignedIn()) {
+    updateCloudStatus(navigator.onLine ? "signedOut" : "offline");
+    if (!silent) openAuthSheet();
+    return;
+  }
+  if (!navigator.onLine) {
+    updateCloudStatus("offline");
+    if (!silent) showToast("当前离线，记录会稍后同步");
+    return;
+  }
+  if (Cloud.isSyncing()) return;
+  updateCloudStatus("syncing");
+  try {
+    await normalizeLocalRecords();
+    records = await DB.getAllRecords();
+
+    const localSettings = {
+      accountName,
+      billingStartDay,
+      currency: "USD",
+      updatedAt: await DB.getSetting("settingsUpdatedAt", new Date(0).toISOString())
+    };
+    const syncedSettings = await Cloud.syncSettings(localSettings);
+    accountName = syncedSettings.accountName;
+    billingStartDay = Number(syncedSettings.billingStartDay);
+    await DB.setSetting("accountName", accountName);
+    await DB.setSetting("billingStartDay", billingStartDay);
+    await DB.setSetting("settingsUpdatedAt", syncedSettings.updatedAt);
+    els.accountButton.textContent = accountName;
+
+    const result = await Cloud.syncRecords(records);
+    records = result.records;
+    lastSyncAt = new Date();
+    render();
+    updateCloudStatus("synced");
+    if (!silent) showToast("云端已同步");
+  } catch (error) {
+    console.error(error);
+    updateCloudStatus("error");
+    if (!silent) showToast(error.message || "同步失败");
+  }
+}
+
+function updateCloudStatus(state) {
+  const text = {
+    checking: "检查同步…", syncing: "正在同步…", synced: lastSyncAt ? "已同步 · 刚刚" : "已同步",
+    signedOut: "登录以同步", offline: "离线 · 待联网", error: "同步失败 · 点此重试"
+  }[state] || "登录以同步";
+  els.syncStatus.textContent = text;
+  els.cloudButton.dataset.state = state;
+  els.cloudButton.onclick = state === "error" ? () => syncNow() : openAuthSheet;
 }
 
 function render() {
-  const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date) || (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  const active = records.filter(r => !r.deleted);
+  const sorted = active.sort((a, b) => b.date.localeCompare(a.date) || (b.updatedAt || "").localeCompare(a.updatedAt || ""));
   const viewDate = new Date(viewYear, viewMonth - 1, billingStartDay);
   const cycle = getBillingCycleByMonth(viewYear, viewMonth, billingStartDay);
   const month = getNaturalMonth(viewDate);
   const year = getNaturalYear(viewDate);
-
   const cycleRecords = sorted.filter(r => inRange(parseDate(r.date), cycle.start, cycle.end));
   const monthRecords = sorted.filter(r => inRange(parseDate(r.date), month.start, month.end));
   const yearRecords = sorted.filter(r => inRange(parseDate(r.date), year.start, year.end));
@@ -325,7 +430,6 @@ function render() {
   els.monthRange.textContent = `${formatShort(month.start)} ~ ${formatShort(addDays(month.end, -1))}`;
   els.yearRange.textContent = `${year.start.getFullYear()}年`;
   els.billingLabel.textContent = `${viewMonth}月 · ${billingStartDay}日`;
-
   renderRecords(cycleRecords, cycle);
 }
 
@@ -334,72 +438,82 @@ function renderRecords(list, cycle) {
     els.recordsList.innerHTML = `<div class="empty"><div class="empty-icon">🧾</div><div>${formatShort(cycle.start)} ~ ${formatShort(addDays(cycle.end, -1))} 没有记录</div><div>点下方 + 记一笔吧</div></div>`;
     return;
   }
-
-  els.recordsList.innerHTML = list.map(r => `
-    <button class="record" onclick="openExpenseSheetById('${r.id}')">
-      <div class="record-icon">${categoryIcon(r.category)}</div>
+  els.recordsList.innerHTML = list.map(record => `
+    <button class="record" onclick="openExpenseSheetById('${record.id}')">
+      <div class="record-icon ${categoryClass(record.category)}">${categoryIcon(record.category)}</div>
       <div class="record-body">
-        <div class="record-title">${escapeHtml(r.note || categoryName(r.category))}</div>
-        <div class="record-sub">${formatRecordDate(parseDate(r.date))} · ${escapeHtml(categoryName(r.category))}</div>
+        <div class="record-title">${escapeHtml(record.note || categoryName(record.category))}</div>
+        <div class="record-sub">${formatRecordDate(parseDate(record.date))} · ${escapeHtml(categoryName(record.category))}</div>
       </div>
-      <div class="record-amount">${money(r.amount)}</div>
-    </button>
-  `).join("");
+      <div class="record-amount">${money(record.amount)}</div>
+      <div class="record-chevron">›</div>
+    </button>`).join("");
 }
 
 function openExpenseSheetById(id) {
-  const record = records.find(r => r.id === id);
+  const record = records.find(r => r.id === id && !r.deleted);
   if (record) openExpenseSheet(record);
 }
 
 function exportCSV() {
   const header = ["日期","类别","金额","备注","ID","UpdatedAt"];
-  const rows = [...records].sort((a,b)=>a.date.localeCompare(b.date)).map(r => [r.date,r.category,r.amount,r.note || "",r.id,r.updatedAt || ""]);
+  const rows = records.filter(r => !r.deleted).sort((a,b) => a.date.localeCompare(b.date))
+    .map(r => [r.date, r.category, r.amount, r.note || "", r.id, r.updatedAt || ""]);
   const csv = [header, ...rows].map(row => row.map(cell => `"${String(cell).replaceAll('"','""')}"`).join(",")).join("\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `amex-expenses-${formatLocalDate(new Date())}.csv`;
-  a.click();
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `amex-expenses-${formatLocalDate(new Date())}.csv`;
+  link.click();
   URL.revokeObjectURL(url);
   showToast("CSV 已导出");
 }
 
-function getBillingCycle(date, startDay) {
-  const y = date.getFullYear();
-  const m = date.getMonth();
-  const d = date.getDate();
-  const start = d >= startDay ? new Date(y, m, startDay) : new Date(y, m - 1, startDay);
-  const end = new Date(start.getFullYear(), start.getMonth() + 1, startDay);
-  return { start, end };
-}
 function getBillingCycleByMonth(year, month, startDay) {
   const start = new Date(Number(year), Number(month) - 1, Number(startDay));
-  const end = new Date(start.getFullYear(), start.getMonth() + 1, Number(startDay));
-  return { start, end };
+  return { start, end: new Date(start.getFullYear(), start.getMonth() + 1, Number(startDay)) };
 }
 function getNaturalMonth(date) { return { start: new Date(date.getFullYear(), date.getMonth(), 1), end: new Date(date.getFullYear(), date.getMonth() + 1, 1) }; }
 function getNaturalYear(date) { return { start: new Date(date.getFullYear(), 0, 1), end: new Date(date.getFullYear() + 1, 0, 1) }; }
 function inRange(date, start, end) { return date >= start && date < end; }
-function sum(list) { return list.reduce((total, r) => total + Number(r.amount || 0), 0); }
-function money(n) { return "$" + Number(n || 0).toFixed(2); }
-function addDays(date, days) { const d = new Date(date); d.setDate(d.getDate() + days); return d; }
+function sum(list) { return list.reduce((total, record) => total + Number(record.amount || 0), 0); }
+function money(value) { return "$" + Number(value || 0).toFixed(2); }
+function addDays(date, days) { const result = new Date(date); result.setDate(result.getDate() + days); return result; }
 function formatLocalDate(date) { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`; }
-function parseDate(s) { const [y,m,d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
+function parseDate(value) { const [y,m,d] = value.split("-").map(Number); return new Date(y, m - 1, d); }
 function formatShort(date) { return `${date.getMonth()+1}.${date.getDate()}`; }
 function formatChineseDate(date) { return `${date.getFullYear()}年${date.getMonth()+1}月${date.getDate()}日`; }
 function formatRecordDate(date) { return `${date.getMonth()+1}月${date.getDate()}日`; }
-function categoryIcon(category) { return category.match(/^\S+/)?.[0] || "📦"; }
-function categoryName(category) { return category.replace(/^\S+/, "").trim() || category; }
-function makeId() { return "exp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9); }
+function categoryIcon(category) { return category?.slice(0, 2).trim() || "📦"; }
+function categoryName(category) { return (category || "📦其他").replace(/^[^\p{L}\p{N}]+/u, "") || "其他"; }
+function categoryClass(category) {
+  if (category.startsWith("🍜")) return "food";
+  if (category.startsWith("🛒")) return "grocery";
+  if (category.startsWith("🚗")) return "transport";
+  if (category.startsWith("🎮")) return "entertainment";
+  if (category.startsWith("📄")) return "study";
+  if (category.startsWith("🏠")) return "rent";
+  if (category.startsWith("🎁")) return "shopping";
+  return "other";
+}
+function makeId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+function isUuid(value) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || ""); }
 function escapeHtml(text) { return String(text).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
 function showToast(text) {
   els.toast.textContent = text;
   els.toast.classList.add("show");
   if (navigator.vibrate) navigator.vibrate(12);
-  setTimeout(() => els.toast.classList.remove("show"), 1500);
+  setTimeout(() => els.toast.classList.remove("show"), 1600);
 }
-function registerServiceWorker() { if ("serviceWorker" in navigator) navigator.serviceWorker.register("./service-worker.js"); }
+function registerServiceWorker() {
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./service-worker.js");
+}
 
 window.openExpenseSheetById = openExpenseSheetById;
