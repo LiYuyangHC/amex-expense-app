@@ -1,4 +1,4 @@
--- AMEX Expense App V3.0.1
+-- AMEX Expense App V3.0.3
 -- Run once in Supabase SQL Editor.
 -- Confirm the allowed email before running.
 
@@ -29,10 +29,11 @@ from ranked r
 where e.id = r.id
   and r.duplicate_rank > 1;
 
--- Final database guard. Active exact duplicates are not allowed.
-create unique index if not exists expenses_owner_content_unique
-on public.expenses (user_id, expense_date, amount, category, note)
-where deleted = false;
+-- V3.0.3: remove the content-based unique index.
+-- UUID `id` is the permanent identity and all cloud writes use upsert(id).
+-- A content unique index can block safe reconciliation when legacy/offline
+-- copies have different UUIDs, and it would also reject legitimate identical purchases.
+drop index if exists public.expenses_owner_content_unique;
 
 alter table public.expenses enable row level security;
 alter table public.user_settings enable row level security;

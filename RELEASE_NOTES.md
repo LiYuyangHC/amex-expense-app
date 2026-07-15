@@ -1,19 +1,30 @@
-# V3.0.2 Release Notes
+# V3.0.5 — Annual Spending Analysis
 
-## Purpose
-This hotfix repairs a sync-ordering bug found in V3.0.1 when an offline or legacy local record has the same date, amount, category, and note as an active cloud record but a different UUID.
+## New
+- The right Dock action is now **消费分析** instead of CSV export.
+- Added a native iOS-style full-screen annual analytics page.
+- Added monthly spending trend visualization for January through December.
+- Added annual category percentages, category ranking, progress bars, and totals.
 
-## Fixed
-- Soft-deleted duplicate rows are now uploaded before active rows.
-- Active rows are uploaded only after the unique content key has been released.
-- A failed cloud write never clears or replaces IndexedDB.
-- Normal synchronization remains silent; only an actual failure is surfaced.
+## Changed
+- CSV export remains available from the `•••` action in the analytics navigation bar.
+- Analytics use the current year's active, non-deleted records and work offline from IndexedDB.
 
-## Database
-No additional SQL migration is required after the V3.0.1 `SUPABASE_SETUP.sql` has already been run.
+## Maintenance
+- Bumped the Service Worker cache to V3.0.5.
 
-## Required test
-1. Deploy V3.0.2.
-2. Reload the PWA so the new service worker activates.
-3. Open Cloud Sync and tap Retry Sync once.
-4. Confirm the error disappears and the active cloud table contains no content duplicates.
+# V3.0.4 — Code Cleanup & Adaptive Statistics
+
+## Removed
+- Removed all hardcoded expense records from the GitHub codebase.
+- Removed the legacy `seedExistingRecordsOnce()` data injection function.
+- New browsers and cleared devices no longer create sample or historical expenses automatically.
+
+## Improved
+- Added locale-aware USD formatting with thousands separators, for example `$12,345.67`.
+- Added runtime font fitting for the three top statistic totals.
+- Statistic amounts retain the largest readable iOS-style size and shrink only when needed.
+- Recalculates statistic font sizes after rendering and when the viewport changes.
+
+## Maintenance
+- Bumped the Service Worker cache to V3.0.4.

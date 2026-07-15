@@ -7,7 +7,11 @@ const els = {
   cycleRange: $("cycleRange"), monthRange: $("monthRange"), yearRange: $("yearRange"),
   recordsList: $("recordsList"), refreshButton: $("refreshButton"),
   billingButton: $("billingButton"), billingLabel: $("billingLabel"),
-  addButton: $("addButton"), exportButton: $("exportButton"), toast: $("toast"),
+  addButton: $("addButton"), analysisButton: $("analysisButton"), toast: $("toast"),
+  analyticsPage: $("analyticsPage"), analyticsBack: $("analyticsBack"), analyticsExport: $("analyticsExport"),
+  analyticsYearLabel: $("analyticsYearLabel"), analyticsYearTotal: $("analyticsYearTotal"),
+  analyticsYearCompare: $("analyticsYearCompare"), analyticsPeakLabel: $("analyticsPeakLabel"),
+  trendChart: $("trendChart"), categoryBreakdown: $("categoryBreakdown"),
 
   authSheet: $("authSheet"), authCancel: $("authCancel"), authGoogle: $("authGoogle"),
   authRetrySync: $("authRetrySync"), authSignOut: $("authSignOut"),
@@ -116,7 +120,9 @@ function initEvents() {
   els.viewYear.addEventListener("change", updateBillingPreview);
   els.viewMonth.addEventListener("change", updateBillingPreview);
 
-  els.exportButton.addEventListener("click", exportCSV);
+  els.analysisButton.addEventListener("click", openAnalyticsPage);
+  els.analyticsBack.addEventListener("click", closeAnalyticsPage);
+  els.analyticsExport.addEventListener("click", exportCSV);
   els.refreshButton.addEventListener("click", () => syncNow());
 
   els.accountButton.addEventListener("click", openAccountSheet);
@@ -138,39 +144,10 @@ function initEvents() {
   window.addEventListener("online", () => syncNow({ silent: true }));
   window.addEventListener("offline", () => { syncHealth = "offline"; updateAuthUI(); });
   window.addEventListener("focus", () => Cloud.isSignedIn() && syncNow({ silent: true }));
-}
-
-async function seedExistingRecordsOnce() {
-  const done = await DB.getSetting("seededExistingRecordsV1", false);
-  if (done) return;
-  const now = new Date().toISOString();
-  const rows = [
-    ["2026-06-30","🍜餐饮",19.28,"午餐"],["2026-06-27","🍜餐饮",106,"晚餐"],
-    ["2026-06-27","🎁购物",5,"头绳"],["2026-06-27","🚗交通",50,"换驾照"],
-    ["2026-06-26","🍜餐饮",32.8,"晚餐 tqco"],["2026-06-24","🍜餐饮",68,"晚餐 咖喱饭"],
-    ["2026-06-23","🎁购物",44,"发膜"],["2026-06-22","🎁购物",178,"移动硬盘"],
-    ["2026-06-22","🍜餐饮",100,"午餐"],["2026-06-21","🍜餐饮",126.12,"晚餐"],
-    ["2026-06-18","🎁购物",68.64,"眼霜"],["2026-06-16","🚗交通",98,"Uber 回波士顿"],
-    ["2026-06-15","🛒买菜",150,"Trader Joe's"],["2026-06-06","🎁购物",9,"扫把"],
-    ["2026-06-03","🏠房租",1550,"房租"],["2026-06-01","🎁购物",8.5,"花"],
-    ["2026-05-29","🛒买菜",216.61,"Costco"],["2026-05-28","🍜餐饮",60,"生煎"],
-    ["2026-05-27","🎁购物",14,"冲鼻器"],["2026-05-27","🍜餐饮",72.02,"晚餐"],
-    ["2026-05-26","🎁购物",84.18,"柜子"],["2026-05-21","🏠房租",169.62,"电费"],
-    ["2026-05-21","🛒买菜",39,"买菜"],["2026-05-18","🍜餐饮",138,"Eva"],
-    ["2026-05-18","🛒买菜",56.74,"Trader Joe's"],["2026-05-16","🍜餐饮",6.9,"星巴克"],
-    ["2026-05-15","🍜餐饮",31.24,"麦当劳"],["2026-05-15","🍜餐饮",21.3,"面包"],
-    ["2026-05-13","🛒买菜",89,"买菜"],["2026-05-13","🛒买菜",128.42,"买菜"],
-    ["2026-05-05","🛒买菜",93,"买菜"],["2026-05-03","🏠房租",1500,"房租"],
-    ["2026-05-02","🍜餐饮",82.44,"餐饮"]
-  ];
-  for (const [date, category, amount, note] of rows) {
-    await DB.saveRecord({
-      id: makeId(), date, category, amount, note, accountName,
-      createdAt: now, updatedAt: now, deleted: false, syncState: "pending"
-    });
-  }
-  await DB.setSetting("seededExistingRecordsV1", true);
-  showToast(`已连接 ${rows.length} 条历史记录`);
+  window.addEventListener("resize", () => {
+    requestAnimationFrame(fitStatNumbers);
+    if (!els.analyticsPage.classList.contains("hidden")) renderAnalytics();
+  });
 }
 
 async function normalizeLocalRecords() {
@@ -491,6 +468,7 @@ function render() {
   els.cycleTotal.textContent = money(sum(cycleRecords));
   els.monthTotal.textContent = money(sum(monthRecords));
   els.yearTotal.textContent = money(sum(yearRecords));
+  requestAnimationFrame(fitStatNumbers);
   els.cycleRange.textContent = `${formatShort(cycle.start)} ~ ${formatShort(addDays(cycle.end, -1))}`;
   els.monthRange.textContent = `${formatShort(month.start)} ~ ${formatShort(addDays(month.end, -1))}`;
   els.yearRange.textContent = `${year.start.getFullYear()}年`;
@@ -520,6 +498,103 @@ function openExpenseSheetById(id) {
   if (record) openExpenseSheet(record);
 }
 
+function openAnalyticsPage() {
+  renderAnalytics();
+  els.analyticsPage.classList.remove("hidden");
+  document.body.classList.add("analytics-open");
+}
+
+function closeAnalyticsPage() {
+  els.analyticsPage.classList.add("hidden");
+  document.body.classList.remove("analytics-open");
+}
+
+function renderAnalytics() {
+  const year = today.getFullYear();
+  const active = records.filter(record => !record.deleted && parseDate(record.date).getFullYear() === year);
+  const total = sum(active);
+  const monthly = Array.from({ length: 12 }, () => 0);
+  const categories = new Map();
+
+  active.forEach(record => {
+    const monthIndex = parseDate(record.date).getMonth();
+    monthly[monthIndex] += Number(record.amount || 0);
+    const category = record.category || "📦其他";
+    categories.set(category, (categories.get(category) || 0) + Number(record.amount || 0));
+  });
+
+  els.analyticsYearLabel.textContent = `${year} 年`;
+  els.analyticsYearTotal.textContent = money(total);
+  els.analyticsYearCompare.textContent = active.length ? `${active.length} 笔记录 · 1–12 月` : "今年还没有消费记录";
+
+  const peakValue = Math.max(...monthly);
+  const peakMonth = monthly.indexOf(peakValue) + 1;
+  els.analyticsPeakLabel.textContent = peakValue > 0 ? `${peakMonth} 月最高` : "暂无数据";
+  els.trendChart.innerHTML = buildTrendChart(monthly);
+
+  const sortedCategories = [...categories.entries()].sort((a, b) => b[1] - a[1]);
+  if (!sortedCategories.length) {
+    els.categoryBreakdown.innerHTML = `<div class="analytics-empty">今年还没有可以分析的记录</div>`;
+    return;
+  }
+
+  els.categoryBreakdown.innerHTML = sortedCategories.map(([category, amount], index) => {
+    const percentage = total > 0 ? amount / total * 100 : 0;
+    return `
+      <article class="category-row">
+        <div class="category-rank">${index + 1}</div>
+        <div class="category-main">
+          <div class="category-line">
+            <span><b>${escapeHtml(categoryIcon(category))}</b>${escapeHtml(categoryName(category))}</span>
+            <strong>${percentage.toFixed(1)}%</strong>
+          </div>
+          <div class="category-progress"><i style="width:${Math.max(percentage, 1.5).toFixed(2)}%"></i></div>
+          <div class="category-amount">${money(amount)}</div>
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function buildTrendChart(monthly) {
+  const width = 360;
+  const height = 210;
+  const pad = { top: 24, right: 12, bottom: 34, left: 12 };
+  const chartWidth = width - pad.left - pad.right;
+  const chartHeight = height - pad.top - pad.bottom;
+  const max = Math.max(...monthly, 1);
+  const points = monthly.map((value, index) => {
+    const x = pad.left + chartWidth * index / 11;
+    const y = pad.top + chartHeight - (value / max) * chartHeight;
+    return { x, y, value, month: index + 1 };
+  });
+  const path = points.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ");
+  const area = `${path} L${points.at(-1).x.toFixed(2)},${(pad.top + chartHeight).toFixed(2)} L${points[0].x.toFixed(2)},${(pad.top + chartHeight).toFixed(2)} Z`;
+  const labels = points.map((point, index) => index % 2 === 0
+    ? `<text x="${point.x}" y="${height - 9}" text-anchor="middle">${point.month}</text>`
+    : "").join("");
+  const dots = points.filter(point => point.value > 0).map(point =>
+    `<circle cx="${point.x}" cy="${point.y}" r="3.8"><title>${point.month}月 ${money(point.value)}</title></circle>`
+  ).join("");
+  const grid = [0, .5, 1].map(ratio => {
+    const y = pad.top + chartHeight * ratio;
+    return `<line x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"/>`;
+  }).join("");
+
+  return `<svg class="trend-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="月度消费趋势图">
+    <defs>
+      <linearGradient id="trendArea" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0a84ff" stop-opacity=".34"/>
+        <stop offset="1" stop-color="#0a84ff" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <g class="trend-grid">${grid}</g>
+    <path class="trend-area" d="${area}"/>
+    <path class="trend-line" d="${path}"/>
+    <g class="trend-dots">${dots}</g>
+    <g class="trend-labels">${labels}</g>
+  </svg>`;
+}
+
 function exportCSV() {
   const header = ["日期","类别","金额","备注","ID","UpdatedAt"];
   const rows = records.filter(r => !r.deleted).sort((a,b) => a.date.localeCompare(b.date))
@@ -543,7 +618,28 @@ function getNaturalMonth(date) { return { start: new Date(date.getFullYear(), da
 function getNaturalYear(date) { return { start: new Date(date.getFullYear(), 0, 1), end: new Date(date.getFullYear() + 1, 0, 1) }; }
 function inRange(date, start, end) { return date >= start && date < end; }
 function sum(list) { return list.reduce((total, record) => total + Number(record.amount || 0), 0); }
-function money(value) { return "$" + Number(value || 0).toFixed(2); }
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+function money(value) { return currencyFormatter.format(Number(value || 0)); }
+
+function fitStatNumbers() {
+  [els.cycleTotal, els.monthTotal, els.yearTotal].forEach(element => {
+    if (!element) return;
+    const maxSize = 23;
+    const minSize = 13;
+    element.style.fontSize = `${maxSize}px`;
+
+    let size = maxSize;
+    while (element.scrollWidth > element.clientWidth && size > minSize) {
+      size -= 0.5;
+      element.style.fontSize = `${size}px`;
+    }
+  });
+}
 function addDays(date, days) { const result = new Date(date); result.setDate(result.getDate() + days); return result; }
 function formatLocalDate(date) { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`; }
 function parseDate(value) { const [y,m,d] = value.split("-").map(Number); return new Date(y, m - 1, d); }

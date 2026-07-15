@@ -18,3 +18,8 @@ Personal iPhone-first PWA for Yuyang Li.
 - Normal sync is silent.
 
 Run `SUPABASE_SETUP.sql` before deploying this version.
+
+
+## Data privacy
+
+No expense data is stored or seeded from the GitHub repository. Expense records live only in IndexedDB and the authenticated Supabase database.

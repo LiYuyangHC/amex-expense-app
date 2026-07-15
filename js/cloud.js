@@ -181,10 +181,9 @@ const Cloud = (() => {
     const pending = records.filter(record => record.syncState !== "synced");
     if (!pending.length) return;
 
-    // The content-based unique index only applies to active rows. When a legacy
-    // duplicate uses a different UUID, the old row must be tombstoned first;
-    // otherwise Postgres may evaluate the active insert before the tombstone
-    // update and reject the whole batch with a unique-constraint error.
+    // Upload tombstones before active rows. Record identity is the permanent UUID;
+    // content-based duplicate cleanup is handled by reconciliation, not by a
+    // database unique constraint, because two legitimate purchases can match.
     const tombstones = pending.filter(record => record.deleted);
     const active = pending.filter(record => !record.deleted);
 

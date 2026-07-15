@@ -1,3 +1,11 @@
+# V3.0.3 deployment order
+
+1. Back up `expenses` as CSV.
+2. Run `SUPABASE_SETUP.sql` in Supabase SQL Editor.
+3. Confirm it reports success.
+4. Upload this release to the GitHub repository root.
+5. Wait for GitHub Pages deployment, then reopen the PWA and retry sync once.
+
 # V3.0.2 Hotfix
 
 If V3.0.1 SQL has already been run, do not run a new database migration. Deploy the files and reload the PWA.

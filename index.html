@@ -50,6 +50,47 @@
     </section>
   </main>
 
+
+  <section class="analytics-page hidden" id="analyticsPage" aria-label="年度消费分析">
+    <header class="analytics-nav">
+      <button id="analyticsBack" class="analytics-nav-button back" type="button" aria-label="返回">‹</button>
+      <div class="analytics-nav-title">
+        <strong>年度分析</strong>
+        <span id="analyticsYearLabel">2026 年</span>
+      </div>
+      <button id="analyticsExport" class="analytics-nav-button more" type="button" aria-label="导出 CSV">•••</button>
+    </header>
+
+    <div class="analytics-scroll">
+      <section class="analytics-hero">
+        <span>今年总支出</span>
+        <strong id="analyticsYearTotal">$0.00</strong>
+        <small id="analyticsYearCompare">1–12 月</small>
+      </section>
+
+      <section class="analytics-card trend-card">
+        <div class="analytics-card-head">
+          <div>
+            <span>月度趋势</span>
+            <strong>每月消费</strong>
+          </div>
+          <span class="analytics-badge" id="analyticsPeakLabel">暂无数据</span>
+        </div>
+        <div class="trend-chart" id="trendChart"></div>
+      </section>
+
+      <section class="analytics-card category-card">
+        <div class="analytics-card-head">
+          <div>
+            <span>类别占比</span>
+            <strong>消费去向</strong>
+          </div>
+        </div>
+        <div class="category-breakdown" id="categoryBreakdown"></div>
+      </section>
+    </div>
+  </section>
+
   <nav class="bottom-bar" aria-label="底部操作">
     <button id="billingButton" class="bottom-action" type="button">
       <span class="action-icon">◷</span>
@@ -61,11 +102,13 @@
 
     <button id="addButton" class="fab" type="button" aria-label="新增花销">+</button>
 
-    <button id="exportButton" class="bottom-action right" type="button">
-      <span class="action-icon">⇩</span>
+    <button id="analysisButton" class="bottom-action right" type="button">
+      <span class="action-icon analysis-dock-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="img"><path d="M4 18V10M10 18V6M16 18v-4M3 18h18"/></svg>
+      </span>
       <span>
-        <strong>导出表格</strong>
-        <small>CSV 格式</small>
+        <strong>消费分析</strong>
+        <small>年度趋势</small>
       </span>
     </button>
   </nav>
