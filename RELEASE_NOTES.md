@@ -1,17 +1,22 @@
-# AMEX Expense App V3.0.0
+# V3.0.1 — Sync Integrity
 
-V3.0 establishes the cloud foundation without making the app feel like a cloud dashboard.
+## Fixed
+- Prevented concurrent sync runs from fighting each other.
+- Prevented offline records from being inserted repeatedly after reconnecting.
+- Prevented legacy migrations from generating new IDs on every launch.
+- Prevented edits from creating a second record.
+- Prevented soft-deleted records from reappearing.
+- Removed active duplicates using date + amount + category + note.
 
-## User-facing changes
-- Sign in with the single approved Google Account.
-- Continue adding, editing, and deleting expenses without a network connection.
-- Data syncs automatically after login, when the app regains focus, and when the network returns.
-- The home screen no longer shows a green sync dot or routine success messages.
-- A small profile button opens account and troubleshooting details.
+## Added
+- Permanent UUID identity for every record.
+- Idempotent Supabase `upsert` using the record UUID.
+- IndexedDB migration version marker.
+- Atomic local canonical replacement after a successful sync.
+- Local duplicate blocking before save.
+- Cloud duplicate cleanup and database-level duplicate protection.
 
-## Data-safety behavior
-- Every edit is written to IndexedDB first.
-- UI refreshes from local data immediately.
-- Failed cloud requests never remove the local record.
-- Deletes are synchronized as tombstones instead of destructive remote deletes.
-- Newer client timestamps win during merges.
+## Data safety
+- Local data is never cleared before a successful cloud round trip.
+- Failed sync leaves local pending records intact.
+- Normal sync remains silent; only actionable failures are surfaced.

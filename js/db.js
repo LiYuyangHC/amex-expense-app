@@ -1,5 +1,5 @@
 const DB_NAME = "amex-expense-db";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_RECORDS = "records";
 const STORE_SETTINGS = "settings";
 
@@ -57,7 +57,12 @@ const DB = {
 
   async saveRecords(records) {
     if (!records.length) return;
+    return runTx(STORE_RECORDS, "readwrite", store => records.forEach(record => store.put(record)));
+  },
+
+  async replaceAllRecords(records) {
     return runTx(STORE_RECORDS, "readwrite", store => {
+      store.clear();
       records.forEach(record => store.put(record));
     });
   },

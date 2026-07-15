@@ -2,7 +2,7 @@ const Cloud = (() => {
   const cfg = window.APP_CONFIG || {};
   let client = null;
   let user = null;
-  let syncing = false;
+  let syncPromise = null;
   let lastError = null;
 
   function available() {
@@ -12,30 +12,17 @@ const Cloud = (() => {
   function init() {
     if (!available()) return null;
     client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        flowType: "pkce"
-      }
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "pkce" }
     });
     return client;
   }
 
-  function normalizedEmail(value) {
-    return String(value || "").trim().toLowerCase();
-  }
-
-  function isAllowedUser(candidate) {
-    return normalizedEmail(candidate?.email) === normalizedEmail(cfg.ALLOWED_EMAIL);
-  }
+  const normalizedEmail = value => String(value || "").trim().toLowerCase();
+  const isAllowedUser = candidate => normalizedEmail(candidate?.email) === normalizedEmail(cfg.ALLOWED_EMAIL);
 
   async function enforceAllowedUser(session) {
     const candidate = session?.user || null;
-    if (!candidate) {
-      user = null;
-      return null;
-    }
+    if (!candidate) { user = null; return null; }
     if (!isAllowedUser(candidate)) {
       await client.auth.signOut();
       user = null;
@@ -53,20 +40,17 @@ const Cloud = (() => {
     return data.session;
   }
 
-  function getUser() { return user; }
-  function isSignedIn() { return Boolean(user); }
-  function isSyncing() { return syncing; }
-  function getLastError() { return lastError; }
+  const getUser = () => user;
+  const isSignedIn = () => Boolean(user);
+  const isSyncing = () => Boolean(syncPromise);
+  const getLastError = () => lastError;
 
   async function signInWithGoogle() {
     if (!client) throw new Error("云端服务未加载");
     const redirectTo = `${location.origin}${location.pathname}`;
     const { error } = await client.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo,
-        queryParams: { access_type: "offline", prompt: "select_account" }
-      }
+      options: { redirectTo, queryParams: { access_type: "offline", prompt: "select_account" } }
     });
     if (error) throw error;
   }
@@ -94,6 +78,15 @@ const Cloud = (() => {
 
   function recordClientTime(record) {
     return record.clientUpdatedAt || record.updatedAt || record.createdAt || new Date(0).toISOString();
+  }
+
+  function contentKey(record) {
+    return [
+      record.date || "",
+      Number(record.amount || 0).toFixed(2),
+      String(record.category || "").trim(),
+      String(record.note || "").trim()
+    ].join("\u001f");
   }
 
   function toCloudRow(record) {
@@ -128,8 +121,30 @@ const Cloud = (() => {
     };
   }
 
-  function isNewer(a, b) {
-    return new Date(a || 0).getTime() > new Date(b || 0).getTime();
+  const isNewer = (a, b) => new Date(a || 0).getTime() > new Date(b || 0).getTime();
+
+  function deduplicateActive(records) {
+    const groups = new Map();
+    const output = records.map(record => ({ ...record }));
+    for (const record of output) {
+      if (record.deleted) continue;
+      const key = contentKey(record);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(record);
+    }
+
+    const now = new Date().toISOString();
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+      group.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")) || a.id.localeCompare(b.id));
+      for (const duplicate of group.slice(1)) {
+        duplicate.deleted = true;
+        duplicate.updatedAt = now;
+        duplicate.clientUpdatedAt = now;
+        duplicate.syncState = "pending";
+      }
+    }
+    return output;
   }
 
   async function fetchCloudRecords() {
@@ -138,72 +153,77 @@ const Cloud = (() => {
     return (data || []).map(fromCloudRow);
   }
 
-  async function syncRecords(localRecords) {
-    if (!client || !user || syncing || !navigator.onLine) return { records: localRecords, changed: false };
-    syncing = true;
-    lastError = null;
-    try {
-      const remoteRecords = await fetchCloudRecords();
-      const remoteMap = new Map(remoteRecords.map(record => [record.id, record]));
-      const merged = new Map();
-      const toPush = [];
+  function mergeById(localRecords, remoteRecords) {
+    const localMap = new Map(localRecords.map(record => [record.id, record]));
+    const remoteMap = new Map(remoteRecords.map(record => [record.id, record]));
+    const ids = new Set([...localMap.keys(), ...remoteMap.keys()]);
+    const merged = [];
 
-      for (const local of localRecords) {
-        const remote = remoteMap.get(local.id);
-        const localTime = recordClientTime(local);
-        const remoteTime = remote ? recordClientTime(remote) : null;
-
-        if (!remote) {
-          merged.set(local.id, local);
-          if (local.syncState !== "synced") toPush.push(local);
-          continue;
-        }
-
-        remoteMap.delete(local.id);
-        if (local.syncState !== "synced" && !isNewer(remoteTime, localTime)) {
-          merged.set(local.id, local);
-          toPush.push(local);
-        } else if (isNewer(remoteTime, localTime)) {
-          merged.set(remote.id, remote);
-        } else {
-          merged.set(local.id, { ...local, syncState: "synced", serverUpdatedAt: remote.serverUpdatedAt });
-        }
+    for (const id of ids) {
+      const local = localMap.get(id);
+      const remote = remoteMap.get(id);
+      if (!local) { merged.push(remote); continue; }
+      if (!remote) {
+        if (local.syncState !== "synced") merged.push(local);
+        continue;
       }
 
-      for (const remote of remoteMap.values()) merged.set(remote.id, remote);
-
-      if (toPush.length) {
-        const { error } = await client.from("expenses").upsert(toPush.map(toCloudRow), { onConflict: "id" });
-        if (error) throw error;
-      }
-
-      const canonical = await fetchCloudRecords();
-      const canonicalMap = new Map(canonical.map(record => [record.id, record]));
-      for (const [id, record] of merged) {
-        if (!canonicalMap.has(id)) canonicalMap.set(id, record);
-      }
-
-      const records = [...canonicalMap.values()];
-      await DB.saveRecords(records);
-      return { records, changed: true };
-    } catch (error) {
-      lastError = error;
-      throw error;
-    } finally {
-      syncing = false;
+      const localTime = recordClientTime(local);
+      const remoteTime = recordClientTime(remote);
+      if (local.syncState !== "synced" && !isNewer(remoteTime, localTime)) merged.push(local);
+      else if (isNewer(remoteTime, localTime)) merged.push(remote);
+      else merged.push({ ...local, syncState: "synced", serverUpdatedAt: remote.serverUpdatedAt });
     }
+    return merged;
+  }
+
+  async function performRecordSync(localRecords) {
+    const remoteRecords = await fetchCloudRecords();
+    let merged = mergeById(localRecords, remoteRecords);
+    merged = deduplicateActive(merged);
+
+    const toPush = merged.filter(record => record.syncState !== "synced");
+    if (toPush.length) {
+      const { error } = await client.from("expenses").upsert(toPush.map(toCloudRow), { onConflict: "id" });
+      if (error) throw error;
+    }
+
+    let canonical = deduplicateActive(await fetchCloudRecords());
+    const cleanup = canonical.filter(record => record.syncState !== "synced");
+    if (cleanup.length) {
+      const { error } = await client.from("expenses").upsert(cleanup.map(toCloudRow), { onConflict: "id" });
+      if (error) throw error;
+      canonical = await fetchCloudRecords();
+    }
+
+    canonical = canonical.map(record => ({ ...record, syncState: "synced" }));
+    await DB.replaceAllRecords(canonical);
+    return { records: canonical, changed: true };
+  }
+
+  async function syncRecords(localRecords) {
+    if (!client || !user || !navigator.onLine) return { records: localRecords, changed: false };
+    if (syncPromise) return syncPromise;
+
+    syncPromise = (async () => {
+      lastError = null;
+      try {
+        return await performRecordSync(localRecords);
+      } catch (error) {
+        lastError = error;
+        throw error;
+      } finally {
+        syncPromise = null;
+      }
+    })();
+    return syncPromise;
   }
 
   async function syncSettings(settings) {
     if (!client || !user || !navigator.onLine) return settings;
     const localTime = settings.clientUpdatedAt || settings.updatedAt || new Date(0).toISOString();
-    const { data: remote, error: readError } = await client
-      .from("user_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const { data: remote, error: readError } = await client.from("user_settings").select("*").eq("user_id", user.id).maybeSingle();
     if (readError) throw readError;
-
     const remoteTime = remote?.client_updated_at || remote?.updated_at;
     if (remote && isNewer(remoteTime, localTime)) {
       return {
@@ -222,11 +242,7 @@ const Cloud = (() => {
       currency: settings.currency || "USD",
       client_updated_at: localTime
     };
-    const { data, error } = await client
-      .from("user_settings")
-      .upsert(payload, { onConflict: "user_id" })
-      .select()
-      .single();
+    const { data, error } = await client.from("user_settings").upsert(payload, { onConflict: "user_id" }).select().single();
     if (error) throw error;
     return {
       accountName: data.account_name,
@@ -240,6 +256,6 @@ const Cloud = (() => {
   return {
     init, getSession, getUser, isSignedIn, isSyncing, getLastError,
     signInWithGoogle, signOut, onAuthStateChange,
-    syncRecords, syncSettings
+    syncRecords, syncSettings, contentKey
   };
 })();

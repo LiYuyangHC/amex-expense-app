@@ -1,18 +1,20 @@
-# AMEX Expense App V3.0.0
+# amex-expense-app V3.0.1
 
-A personal, iPhone-first expense PWA with IndexedDB local-first storage, Supabase PostgreSQL backup, and Google OAuth.
+Personal iPhone-first PWA for Yuyang Li.
 
 ## Architecture
-1. Write every mutation to IndexedDB.
-2. Render the UI immediately from local state.
-3. Synchronize with Supabase silently in the background.
-4. Keep pending local changes if the network or cloud request fails.
+- GitHub Pages PWA
+- IndexedDB local-first storage
+- Supabase PostgreSQL cloud persistence
+- Google OAuth
 
-## Owner access
-This build is configured for one Google Account only. See `js/config.js` and `SUPABASE_SETUP.sql`.
+## Sync model
+- Every record receives one permanent UUID at creation.
+- Local changes are written first and marked pending.
+- Cloud writes use idempotent UUID upserts.
+- Deletes use tombstones (`deleted = true`).
+- Exact active duplicates are defined by date + amount + category + note.
+- Successful sync atomically replaces local data with the cloud canonical set.
+- Normal sync is silent.
 
-## Deployment
-Read `DEPLOYMENT_GUIDE.md`, run `SUPABASE_SETUP.sql`, then deploy the project root to GitHub Pages.
-
-## Security
-The frontend contains only the Supabase publishable key. Database access is enforced by RLS with both `auth.uid()` and the exact JWT email. Never commit privileged secrets.
+Run `SUPABASE_SETUP.sql` before deploying this version.

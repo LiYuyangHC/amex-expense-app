@@ -37,6 +37,7 @@ let selectedDate = new Date();
 let editingId = null;
 let lastSyncAt = null;
 let syncHealth = "idle";
+let syncNowPromise = null;
 const today = new Date();
 
 init();
@@ -173,24 +174,52 @@ async function seedExistingRecordsOnce() {
 }
 
 async function normalizeLocalRecords() {
+  const migrationVersion = Number(await DB.getSetting("dataMigrationVersion", 0));
   const local = await DB.getAllRecords();
+  const normalizedRecords = [];
+  const activeKeys = new Map();
+  const now = new Date().toISOString();
+
   for (const record of local) {
     const normalized = {
       ...record,
+      id: isUuid(record.id) ? record.id : makeId(),
       accountName: record.accountName || accountName,
-      createdAt: record.createdAt || record.updatedAt || new Date().toISOString(),
-      updatedAt: record.updatedAt || new Date().toISOString(),
-      clientUpdatedAt: record.clientUpdatedAt || record.updatedAt || new Date().toISOString(),
+      createdAt: record.createdAt || record.updatedAt || now,
+      updatedAt: record.updatedAt || now,
+      clientUpdatedAt: record.clientUpdatedAt || record.updatedAt || now,
       deleted: Boolean(record.deleted),
-      syncState: record.syncState || "pending"
+      syncState: migrationVersion < 3 ? "pending" : (record.syncState || "pending")
     };
-    if (!isUuid(record.id)) {
-      normalized.id = makeId();
-      await DB.replaceRecordId(record.id, normalized);
-    } else if (JSON.stringify(record) !== JSON.stringify(normalized)) {
-      await DB.saveRecord(normalized);
+
+    if (!normalized.deleted) {
+      const key = expenseContentKey(normalized);
+      const existingIndex = activeKeys.get(key);
+      if (existingIndex !== undefined) {
+        const existing = normalizedRecords[existingIndex];
+        const keepExisting = String(existing.createdAt || "") <= String(normalized.createdAt || "");
+        const duplicate = keepExisting ? normalized : existing;
+        duplicate.deleted = true;
+        duplicate.updatedAt = now;
+        duplicate.clientUpdatedAt = now;
+        duplicate.syncState = "pending";
+        if (!keepExisting) {
+          normalizedRecords[existingIndex] = normalized;
+          activeKeys.set(key, existingIndex);
+          normalizedRecords.push(duplicate);
+        } else {
+          normalizedRecords.push(duplicate);
+        }
+        continue;
+      }
+      activeKeys.set(key, normalizedRecords.length);
     }
+    normalizedRecords.push(normalized);
   }
+
+  await DB.replaceAllRecords(normalizedRecords);
+  await DB.setSetting("dataMigrationVersion", 3);
+  await DB.setSetting("legacyImportCompleted", true);
 }
 
 function openExpenseSheet(record = null) {
@@ -220,15 +249,24 @@ function closeExpenseSheet() {
 async function saveRecord() {
   const amount = Number(els.amount.value);
   if (!els.amount.value || !Number.isFinite(amount) || amount <= 0) return showToast("先填金额哦");
+
+  const draft = {
+    date: formatLocalDate(selectedDate),
+    category: els.category.value,
+    amount,
+    note: els.note.value.trim()
+  };
+  const duplicate = records.find(record =>
+    !record.deleted && record.id !== editingId && expenseContentKey(record) === expenseContentKey(draft)
+  );
+  if (duplicate) return showToast("这笔记录已经存在");
+
   const now = new Date().toISOString();
   const existing = editingId ? records.find(r => r.id === editingId) : null;
   const wasEditing = Boolean(editingId);
   await DB.saveRecord({
     id: editingId || makeId(),
-    date: formatLocalDate(selectedDate),
-    category: els.category.value,
-    amount,
-    note: els.note.value.trim(),
+    ...draft,
     accountName,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
@@ -380,51 +418,62 @@ async function signOutCloud() {
 }
 
 async function syncNow({ silent = false } = {}) {
-  if (!Cloud.isSignedIn()) {
-    syncHealth = navigator.onLine ? "idle" : "offline";
+  if (syncNowPromise) return syncNowPromise;
+
+  syncNowPromise = (async () => {
+    if (!Cloud.isSignedIn()) {
+      syncHealth = navigator.onLine ? "idle" : "offline";
+      updateAuthUI();
+      if (!silent) openAuthSheet();
+      return;
+    }
+    if (!navigator.onLine) {
+      syncHealth = "offline";
+      updateAuthUI();
+      if (!silent) showToast("当前离线，本地记录已保存");
+      return;
+    }
+
+    syncHealth = "syncing";
     updateAuthUI();
-    if (!silent) openAuthSheet();
-    return;
-  }
-  if (!navigator.onLine) {
-    syncHealth = "offline";
-    updateAuthUI();
-    if (!silent) showToast("当前离线，本地记录已保存");
-    return;
-  }
-  if (Cloud.isSyncing()) return;
-  syncHealth = "syncing";
-  updateAuthUI();
+    try {
+      await normalizeLocalRecords();
+      records = await DB.getAllRecords();
+
+      const settingsUpdatedAt = await DB.getSetting("settingsUpdatedAt", new Date(0).toISOString());
+      const localSettings = {
+        accountName,
+        billingStartDay,
+        currency: "USD",
+        updatedAt: settingsUpdatedAt,
+        clientUpdatedAt: settingsUpdatedAt
+      };
+      const syncedSettings = await Cloud.syncSettings(localSettings);
+      accountName = syncedSettings.accountName;
+      billingStartDay = Number(syncedSettings.billingStartDay);
+      await DB.setSetting("accountName", accountName);
+      await DB.setSetting("billingStartDay", billingStartDay);
+      await DB.setSetting("settingsUpdatedAt", syncedSettings.updatedAt);
+      els.accountButton.textContent = accountName;
+
+      const result = await Cloud.syncRecords(records);
+      records = result.records;
+      lastSyncAt = new Date();
+      syncHealth = "healthy";
+      render();
+      updateAuthUI();
+    } catch (error) {
+      console.error(error);
+      syncHealth = "error";
+      updateAuthUI(error.message || "同步失败");
+      if (!silent) showToast("同步失败，本地数据未丢失");
+    }
+  })();
+
   try {
-    await normalizeLocalRecords();
-    records = await DB.getAllRecords();
-
-    const localSettings = {
-      accountName,
-      billingStartDay,
-      currency: "USD",
-      updatedAt: await DB.getSetting("settingsUpdatedAt", new Date(0).toISOString()),
-      clientUpdatedAt: await DB.getSetting("settingsUpdatedAt", new Date(0).toISOString())
-    };
-    const syncedSettings = await Cloud.syncSettings(localSettings);
-    accountName = syncedSettings.accountName;
-    billingStartDay = Number(syncedSettings.billingStartDay);
-    await DB.setSetting("accountName", accountName);
-    await DB.setSetting("billingStartDay", billingStartDay);
-    await DB.setSetting("settingsUpdatedAt", syncedSettings.updatedAt);
-    els.accountButton.textContent = accountName;
-
-    const result = await Cloud.syncRecords(records);
-    records = result.records;
-    lastSyncAt = new Date();
-    syncHealth = "healthy";
-    render();
-    updateAuthUI();
-  } catch (error) {
-    console.error(error);
-    syncHealth = "error";
-    updateAuthUI(error.message || "同步失败");
-    if (!silent) showToast("同步失败，本地数据未丢失");
+    return await syncNowPromise;
+  } finally {
+    syncNowPromise = null;
   }
 }
 
@@ -512,6 +561,14 @@ function categoryClass(category) {
   if (category.startsWith("🏠")) return "rent";
   if (category.startsWith("🎁")) return "shopping";
   return "other";
+}
+function expenseContentKey(record) {
+  return [
+    record.date || "",
+    Number(record.amount || 0).toFixed(2),
+    String(record.category || "").trim(),
+    String(record.note || "").trim()
+  ].join("\u001f");
 }
 function makeId() {
   if (crypto.randomUUID) return crypto.randomUUID();

@@ -1,36 +1,34 @@
-# V3.0 Test Checklist
+# V3.0.1 Test Checklist
 
 ## Before deployment
-- [ ] Confirm the owner email spelling.
-- [ ] Run `SUPABASE_SETUP.sql` successfully.
-- [ ] Confirm Google provider is enabled in Supabase.
-- [ ] Confirm GitHub Pages URL is in Supabase Redirect URLs.
-- [ ] Confirm no service-role key or Google client secret exists in the repository.
+- Export the `expenses` table as CSV.
+- Confirm `gnaguy.lee@gmail.com` is the correct account.
+- Run `SUPABASE_SETUP.sql` successfully.
 
-## Authentication
-- [ ] Approved Google Account logs in successfully.
-- [ ] A different Google Account is signed out and denied.
-- [ ] Refreshing the page preserves the approved session.
-- [ ] Logout returns the app to local-only mode.
+## Duplicate migration
+- Confirm existing exact duplicates become one visible record.
+- Confirm duplicate rows remain in Supabase only as `deleted = true` tombstones.
+- Confirm refreshing the app does not recreate duplicates.
+- Confirm reconnecting after offline use does not recreate duplicates.
 
-## Local-first behavior
-- [ ] Add an expense while online; UI updates immediately.
-- [ ] Add an expense in Airplane Mode; UI updates immediately.
-- [ ] Edit an expense in Airplane Mode.
-- [ ] Delete an expense in Airplane Mode.
-- [ ] Close and reopen the PWA while offline; changes remain.
+## Offline-first
+- Go offline and add a record; it appears immediately.
+- Edit the offline record; its UUID remains unchanged.
+- Delete the offline record; it disappears locally.
+- Reconnect; all three operations reach Supabase once.
 
-## Recovery and synchronization
-- [ ] Restore the network; offline changes appear in Supabase.
-- [ ] Deleted records remain hidden after refresh and re-login.
-- [ ] Repeated focus/refresh does not create duplicates.
-- [ ] Existing IndexedDB records upload only once.
-- [ ] Settings sync without changing the selected historical view month.
+## Conflict and locking
+- Trigger refresh, focus and online events close together; only one sync executes.
+- Open the PWA twice and confirm repeated sync does not multiply records.
+- Repeat manual sync several times; record counts remain stable.
 
-## UI and PWA
-- [ ] No green sync dot appears on the home screen.
-- [ ] Normal successful sync produces no toast.
-- [ ] Sync failure is visible only through the profile button/error badge.
-- [ ] Bottom dock stays fixed during scrolling.
-- [ ] GitHub Pages loads from `/amex-expense-app/`.
-- [ ] Installed iPhone PWA launches in standalone mode.
+## Duplicate prevention
+- Try to add the same date, amount, category and note twice.
+- Confirm the second save is blocked with “这笔记录已经存在”.
+- Confirm the database unique index blocks an active exact duplicate from another client.
+
+## Regression
+- Current cycle, natural month and natural year totals remain correct.
+- Edit, delete and CSV export still work.
+- Google sign-in persists after refresh.
+- Wrong Google accounts are rejected.

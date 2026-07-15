@@ -1,24 +1,20 @@
-# Changelog
+# CHANGELOG
 
-## V3.0.0 — Google Login & Cloud Foundation
+## V3.0.1 — Sync Integrity
+- Added a single-flight application sync lock.
+- Added a single-flight cloud record sync lock.
+- Added permanent UUID migration for legacy records.
+- Added `dataMigrationVersion = 3` and `legacyImportCompleted` metadata.
+- Changed all cloud record writes to idempotent `upsert(..., onConflict: "id")`.
+- Added exact duplicate detection using date, amount, category and note.
+- Added automatic soft deletion of duplicate local and cloud rows.
+- Added a partial unique index to block active exact duplicates in Supabase.
+- Added atomic replacement of the local canonical record set after successful sync.
+- Bumped IndexedDB schema and Service Worker cache versions.
 
-### Added
-- Google OAuth through Supabase Auth.
-- Exact owner-email allowlist in both the client and RLS policies.
-- Local-first cloud synchronization for expenses and settings.
-- `client_updated_at` timestamps for deterministic merge decisions.
-- Soft-delete synchronization through the existing `deleted` field.
-- Silent automatic sync on login, app focus, and network recovery.
-- Account sheet with login, logout, manual retry, and last-sync details.
-- Deployment, migration, and test documentation.
-
-### Changed
-- Removed the persistent green sync dot and success status from the home screen.
-- Replaced email Magic Link authentication with Google OAuth.
-- Updated service-worker caching to reduce stale GitHub Pages releases.
-- Normal sync success is now silent; only actionable failures are surfaced.
-
-### Fixed
-- Prevented arbitrary authenticated accounts from accessing app tables.
-- Prevented older remote records from silently replacing newer offline edits.
-- Preserved deleted records as tombstones so they do not reappear after sync.
+## V3.0.0 — Cloud Foundation
+- Added Google OAuth through Supabase.
+- Restricted access to the configured Google account.
+- Added local-first cloud synchronization.
+- Added soft-delete synchronization.
+- Added silent normal sync and failure-only status feedback.
