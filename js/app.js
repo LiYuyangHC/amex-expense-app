@@ -44,7 +44,23 @@ let syncHealth = "idle";
 let syncNowPromise = null;
 const today = new Date();
 
-init();
+init().catch(handleFatalInitError);
+
+function handleFatalInitError(error) {
+  console.error("App initialization failed", error);
+  const list = document.getElementById("recordsList");
+  if (list && !list.children.length) {
+    list.innerHTML = `<div class="empty-state"><strong>页面加载失败</strong><span>账单数据没有被删除。请刷新页面重试。</span></div>`;
+  }
+}
+
+function bind(element, eventName, handler) {
+  if (!element) {
+    console.warn(`Missing UI element for ${eventName}`);
+    return;
+  }
+  element.addEventListener(eventName, handler);
+}
 
 async function init() {
   initStaticSelects();
@@ -101,41 +117,41 @@ function initStaticSelects() {
 }
 
 function initEvents() {
-  els.addButton.addEventListener("click", () => openExpenseSheet());
-  els.expenseCancel.addEventListener("click", closeExpenseSheet);
-  els.expenseDone.addEventListener("click", saveRecord);
-  els.deleteEditingButton.addEventListener("click", () => editingId && deleteRecord(editingId));
+  bind(els.addButton, "click", () => openExpenseSheet());
+  bind(els.expenseCancel, "click", closeExpenseSheet);
+  bind(els.expenseDone, "click", saveRecord);
+  bind(els.deleteEditingButton, "click", () => editingId && deleteRecord(editingId));
 
-  els.dateButton.addEventListener("click", openDateSheet);
-  els.dateCancel.addEventListener("click", closeDateSheet);
-  els.dateDone.addEventListener("click", confirmDate);
-  els.todayButton.addEventListener("click", () => { setSelectedDate(new Date()); closeDateSheet(); });
-  els.dateYear.addEventListener("change", () => refreshDayOptions());
-  els.dateMonth.addEventListener("change", () => refreshDayOptions());
+  bind(els.dateButton, "click", openDateSheet);
+  bind(els.dateCancel, "click", closeDateSheet);
+  bind(els.dateDone, "click", confirmDate);
+  bind(els.todayButton, "click", () => { setSelectedDate(new Date()); closeDateSheet(); });
+  bind(els.dateYear, "change", () => refreshDayOptions());
+  bind(els.dateMonth, "change", () => refreshDayOptions());
 
-  els.billingButton.addEventListener("click", openBillingSheet);
-  els.billingCancel.addEventListener("click", closeBillingSheet);
-  els.billingDone.addEventListener("click", saveBillingSettings);
-  els.billingStartDay.addEventListener("change", updateBillingPreview);
-  els.viewYear.addEventListener("change", updateBillingPreview);
-  els.viewMonth.addEventListener("change", updateBillingPreview);
+  bind(els.billingButton, "click", openBillingSheet);
+  bind(els.billingCancel, "click", closeBillingSheet);
+  bind(els.billingDone, "click", saveBillingSettings);
+  bind(els.billingStartDay, "change", updateBillingPreview);
+  bind(els.viewYear, "change", updateBillingPreview);
+  bind(els.viewMonth, "change", updateBillingPreview);
 
-  els.analysisButton.addEventListener("click", openAnalyticsPage);
-  els.analyticsBack.addEventListener("click", closeAnalyticsPage);
-  els.analyticsExport.addEventListener("click", exportCSV);
-  els.refreshButton.addEventListener("click", () => syncNow());
+  bind(els.analysisButton, "click", openAnalyticsPage);
+  bind(els.analyticsBack, "click", closeAnalyticsPage);
+  bind(els.analyticsExport, "click", exportCSV);
+  bind(els.refreshButton, "click", () => syncNow());
 
-  els.accountButton.addEventListener("click", openAccountSheet);
-  els.accountCancel.addEventListener("click", closeAccountSheet);
-  els.accountDone.addEventListener("click", saveAccountName);
+  bind(els.accountButton, "click", openAccountSheet);
+  bind(els.accountCancel, "click", closeAccountSheet);
+  bind(els.accountDone, "click", saveAccountName);
 
-  els.profileButton.addEventListener("click", openAuthSheet);
-  els.authCancel.addEventListener("click", closeAuthSheet);
-  els.authGoogle.addEventListener("click", signInGoogle);
-  els.authRetrySync.addEventListener("click", () => syncNow());
-  els.authSignOut.addEventListener("click", signOutCloud);
+  bind(els.profileButton, "click", openAuthSheet);
+  bind(els.authCancel, "click", closeAuthSheet);
+  bind(els.authGoogle, "click", signInGoogle);
+  bind(els.authRetrySync, "click", () => syncNow());
+  bind(els.authSignOut, "click", signOutCloud);
 
-  [els.expenseSheet, els.dateSheet, els.billingSheet, els.accountSheet, els.authSheet].forEach(backdrop => {
+  [els.expenseSheet, els.dateSheet, els.billingSheet, els.accountSheet, els.authSheet].filter(Boolean).forEach(backdrop => {
     backdrop.addEventListener("click", event => {
       if (event.target === backdrop) backdrop.classList.add("hidden");
     });
@@ -568,7 +584,7 @@ function buildTrendChart(monthly) {
     return { x, y, value, month: index + 1 };
   });
   const path = points.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ");
-  const area = `${path} L${points.at(-1).x.toFixed(2)},${(pad.top + chartHeight).toFixed(2)} L${points[0].x.toFixed(2)},${(pad.top + chartHeight).toFixed(2)} Z`;
+  const area = `${path} L${points[points.length - 1].x.toFixed(2)},${(pad.top + chartHeight).toFixed(2)} L${points[0].x.toFixed(2)},${(pad.top + chartHeight).toFixed(2)} Z`;
   const labels = points.map((point, index) => index % 2 === 0
     ? `<text x="${point.x}" y="${height - 9}" text-anchor="middle">${point.month}</text>`
     : "").join("");

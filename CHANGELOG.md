@@ -1,3 +1,9 @@
+# V3.0.6
+- Fixed PWA mixed-cache startup failure.
+- Added cache-busted JS/CSS resources.
+- Added defensive UI initialization.
+- Improved older iOS Safari compatibility.
+
 # V3.0.5
 
 - Replaced the Dock CSV action with an annual spending analysis page.
