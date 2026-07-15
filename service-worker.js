@@ -1,4 +1,4 @@
-const CACHE_NAME = "amex-expense-v3-0-1";
+const CACHE_NAME = "amex-expense-v3-0-2";
 const APP_SHELL = [
   "./", "./index.html", "./manifest.json", "./icon.png", "./css/app.css",
   "./js/config.js", "./js/db.js", "./js/cloud.js", "./js/app.js"

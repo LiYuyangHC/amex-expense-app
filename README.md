@@ -1,4 +1,4 @@
-# amex-expense-app V3.0.1
+# amex-expense-app V3.0.2
 
 Personal iPhone-first PWA for Yuyang Li.
 

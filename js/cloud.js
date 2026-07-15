@@ -177,26 +177,49 @@ const Cloud = (() => {
     return merged;
   }
 
+  async function pushRecordsInSafeOrder(records) {
+    const pending = records.filter(record => record.syncState !== "synced");
+    if (!pending.length) return;
+
+    // The content-based unique index only applies to active rows. When a legacy
+    // duplicate uses a different UUID, the old row must be tombstoned first;
+    // otherwise Postgres may evaluate the active insert before the tombstone
+    // update and reject the whole batch with a unique-constraint error.
+    const tombstones = pending.filter(record => record.deleted);
+    const active = pending.filter(record => !record.deleted);
+
+    if (tombstones.length) {
+      const { error } = await client
+        .from("expenses")
+        .upsert(tombstones.map(toCloudRow), { onConflict: "id" });
+      if (error) throw error;
+    }
+
+    if (active.length) {
+      const { error } = await client
+        .from("expenses")
+        .upsert(active.map(toCloudRow), { onConflict: "id" });
+      if (error) throw error;
+    }
+  }
+
   async function performRecordSync(localRecords) {
     const remoteRecords = await fetchCloudRecords();
     let merged = mergeById(localRecords, remoteRecords);
     merged = deduplicateActive(merged);
 
-    const toPush = merged.filter(record => record.syncState !== "synced");
-    if (toPush.length) {
-      const { error } = await client.from("expenses").upsert(toPush.map(toCloudRow), { onConflict: "id" });
-      if (error) throw error;
-    }
+    await pushRecordsInSafeOrder(merged);
 
     let canonical = deduplicateActive(await fetchCloudRecords());
-    const cleanup = canonical.filter(record => record.syncState !== "synced");
-    if (cleanup.length) {
-      const { error } = await client.from("expenses").upsert(cleanup.map(toCloudRow), { onConflict: "id" });
-      if (error) throw error;
-      canonical = await fetchCloudRecords();
-    }
+    await pushRecordsInSafeOrder(canonical);
 
-    canonical = canonical.map(record => ({ ...record, syncState: "synced" }));
+    // Fetch again only after all tombstones and active rows have been accepted,
+    // so IndexedDB is replaced with the canonical server representation.
+    canonical = (await fetchCloudRecords()).map(record => ({
+      ...record,
+      syncState: "synced"
+    }));
+
     await DB.replaceAllRecords(canonical);
     return { records: canonical, changed: true };
   }

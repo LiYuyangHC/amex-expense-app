@@ -1,3 +1,7 @@
+# V3.0.2 Hotfix
+
+If V3.0.1 SQL has already been run, do not run a new database migration. Deploy the files and reload the PWA.
+
 # V3.0.1 Deployment
 
 1. Back up Supabase `expenses` as CSV.
