@@ -9,8 +9,11 @@ const els = {
   billingButton: $("billingButton"), billingLabel: $("billingLabel"),
   addButton: $("addButton"), analysisButton: $("analysisButton"), toast: $("toast"),
   analyticsPage: $("analyticsPage"), analyticsBack: $("analyticsBack"), analyticsExport: $("analyticsExport"),
-  analyticsYearLabel: $("analyticsYearLabel"), analyticsYearTotal: $("analyticsYearTotal"),
-  analyticsYearCompare: $("analyticsYearCompare"), analyticsPeakLabel: $("analyticsPeakLabel"),
+  analyticsPrevYear: $("analyticsPrevYear"), analyticsNextYear: $("analyticsNextYear"),
+  analyticsYearLabel: $("analyticsYearLabel"), analyticsPeriodLabel: $("analyticsPeriodLabel"),
+  analyticsMonthStrip: $("analyticsMonthStrip"), analyticsTotalLabel: $("analyticsTotalLabel"),
+  analyticsYearTotal: $("analyticsYearTotal"), analyticsYearCompare: $("analyticsYearCompare"),
+  analyticsPeakLabel: $("analyticsPeakLabel"), analyticsTrendTitle: $("analyticsTrendTitle"),
   trendChart: $("trendChart"), categoryBreakdown: $("categoryBreakdown"),
 
   authSheet: $("authSheet"), authCancel: $("authCancel"), authGoogle: $("authGoogle"),
@@ -42,6 +45,8 @@ let editingId = null;
 let lastSyncAt = null;
 let syncHealth = "idle";
 let syncNowPromise = null;
+let analyticsYear = new Date().getFullYear();
+let analyticsMonth = 0; // 0 = 全年，1–12 = 指定月份
 const today = new Date();
 
 init().catch(handleFatalInitError);
@@ -139,6 +144,14 @@ function initEvents() {
   bind(els.analysisButton, "click", openAnalyticsPage);
   bind(els.analyticsBack, "click", closeAnalyticsPage);
   bind(els.analyticsExport, "click", exportCSV);
+  bind(els.analyticsPrevYear, "click", () => changeAnalyticsYear(-1));
+  bind(els.analyticsNextYear, "click", () => changeAnalyticsYear(1));
+  bind(els.analyticsMonthStrip, "click", event => {
+    const button = event.target.closest("button[data-month]");
+    if (!button) return;
+    analyticsMonth = Number(button.dataset.month);
+    renderAnalytics();
+  });
   bind(els.refreshButton, "click", () => syncNow());
 
   bind(els.accountButton, "click", openAccountSheet);
@@ -525,32 +538,79 @@ function closeAnalyticsPage() {
   document.body.classList.remove("analytics-open");
 }
 
+function getAnalyticsYearBounds() {
+  const years = records
+    .filter(record => !record.deleted)
+    .map(record => parseDate(record.date).getFullYear())
+    .filter(Number.isFinite);
+  years.push(today.getFullYear());
+  return { min: Math.min(...years), max: Math.max(...years) };
+}
+
+function changeAnalyticsYear(delta) {
+  const bounds = getAnalyticsYearBounds();
+  analyticsYear = Math.min(bounds.max, Math.max(bounds.min, analyticsYear + delta));
+  renderAnalytics();
+}
+
+function renderAnalyticsMonthStrip() {
+  const labels = ["全年", "1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+  els.analyticsMonthStrip.innerHTML = labels.map((label, month) => `
+    <button type="button" role="tab" data-month="${month}"
+      aria-selected="${analyticsMonth === month}"
+      class="${analyticsMonth === month ? "selected" : ""}">${label}</button>`).join("");
+  const selected = els.analyticsMonthStrip.querySelector(".selected");
+  if (selected) requestAnimationFrame(() => selected.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" }));
+}
+
 function renderAnalytics() {
-  const year = today.getFullYear();
-  const active = records.filter(record => !record.deleted && parseDate(record.date).getFullYear() === year);
+  const bounds = getAnalyticsYearBounds();
+  analyticsYear = Math.min(bounds.max, Math.max(bounds.min, analyticsYear));
+
+  const yearRecords = records.filter(record =>
+    !record.deleted && parseDate(record.date).getFullYear() === analyticsYear
+  );
+  const active = analyticsMonth === 0
+    ? yearRecords
+    : yearRecords.filter(record => parseDate(record.date).getMonth() + 1 === analyticsMonth);
+
   const total = sum(active);
   const monthly = Array.from({ length: 12 }, () => 0);
   const categories = new Map();
 
-  active.forEach(record => {
+  yearRecords.forEach(record => {
     const monthIndex = parseDate(record.date).getMonth();
     monthly[monthIndex] += Number(record.amount || 0);
+  });
+
+  active.forEach(record => {
     const category = record.category || "📦其他";
     categories.set(category, (categories.get(category) || 0) + Number(record.amount || 0));
   });
 
-  els.analyticsYearLabel.textContent = `${year} 年`;
+  renderAnalyticsMonthStrip();
+  els.analyticsYearLabel.textContent = `${analyticsYear} 年`;
+  els.analyticsPeriodLabel.textContent = analyticsMonth ? `${analyticsYear} 年 ${analyticsMonth} 月` : `${analyticsYear} 年全年`;
+  els.analyticsTotalLabel.textContent = analyticsMonth ? `${analyticsMonth} 月总支出` : "全年总支出";
   els.analyticsYearTotal.textContent = money(total);
-  els.analyticsYearCompare.textContent = active.length ? `${active.length} 笔记录 · 1–12 月` : "今年还没有消费记录";
+  els.analyticsYearCompare.textContent = active.length
+    ? `${active.length} 笔记录${analyticsMonth ? ` · ${analyticsMonth} 月` : " · 1–12 月"}`
+    : (analyticsMonth ? `${analyticsMonth} 月还没有消费记录` : "这一年还没有消费记录");
+
+  els.analyticsPrevYear.disabled = analyticsYear <= bounds.min;
+  els.analyticsNextYear.disabled = analyticsYear >= bounds.max;
 
   const peakValue = Math.max(...monthly);
   const peakMonth = monthly.indexOf(peakValue) + 1;
-  els.analyticsPeakLabel.textContent = peakValue > 0 ? `${peakMonth} 月最高` : "暂无数据";
-  els.trendChart.innerHTML = buildTrendChart(monthly);
+  els.analyticsPeakLabel.textContent = analyticsMonth
+    ? `${analyticsMonth} 月 ${money(monthly[analyticsMonth - 1])}`
+    : (peakValue > 0 ? `${peakMonth} 月最高` : "暂无数据");
+  els.analyticsTrendTitle.textContent = `${analyticsYear} 月度趋势`;
+  els.trendChart.innerHTML = buildTrendChart(monthly, analyticsMonth);
 
   const sortedCategories = [...categories.entries()].sort((a, b) => b[1] - a[1]);
   if (!sortedCategories.length) {
-    els.categoryBreakdown.innerHTML = `<div class="analytics-empty">今年还没有可以分析的记录</div>`;
+    els.categoryBreakdown.innerHTML = `<div class="analytics-empty">${analyticsMonth ? `${analyticsMonth} 月` : `${analyticsYear} 年`}还没有可以分析的记录</div>`;
     return;
   }
 
@@ -571,7 +631,7 @@ function renderAnalytics() {
   }).join("");
 }
 
-function buildTrendChart(monthly) {
+function buildTrendChart(monthly, selectedMonth = 0) {
   const width = 360;
   const height = 210;
   const pad = { top: 24, right: 12, bottom: 34, left: 12 };
@@ -588,9 +648,10 @@ function buildTrendChart(monthly) {
   const labels = points.map((point, index) => index % 2 === 0
     ? `<text x="${point.x}" y="${height - 9}" text-anchor="middle">${point.month}</text>`
     : "").join("");
-  const dots = points.filter(point => point.value > 0).map(point =>
-    `<circle cx="${point.x}" cy="${point.y}" r="3.8"><title>${point.month}月 ${money(point.value)}</title></circle>`
-  ).join("");
+  const dots = points.filter(point => point.value > 0 || point.month === selectedMonth).map(point => {
+    const selected = point.month === selectedMonth;
+    return `<circle class="${selected ? "selected" : ""}" cx="${point.x}" cy="${point.y}" r="${selected ? 6 : 3.8}"><title>${point.month}月 ${money(point.value)}</title></circle>`;
+  }).join("");
   const grid = [0, .5, 1].map(ratio => {
     const y = pad.top + chartHeight * ratio;
     return `<line x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"/>`;

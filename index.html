@@ -6,7 +6,7 @@
   <title>刷卡记账</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icon.png">
-  <link rel="stylesheet" href="./css/app.css?v=3.0.6">
+  <link rel="stylesheet" href="./css/app.css?v=3.0.7">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="刷卡记账">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -55,15 +55,24 @@
     <header class="analytics-nav">
       <button id="analyticsBack" class="analytics-nav-button back" type="button" aria-label="返回">‹</button>
       <div class="analytics-nav-title">
-        <strong>年度分析</strong>
-        <span id="analyticsYearLabel">2026 年</span>
+        <strong>消费分析</strong>
+        <span id="analyticsPeriodLabel">年度与月份</span>
       </div>
       <button id="analyticsExport" class="analytics-nav-button more" type="button" aria-label="导出 CSV">•••</button>
     </header>
 
     <div class="analytics-scroll">
+      <section class="analytics-filter" aria-label="分析时间范围">
+        <div class="analytics-year-picker">
+          <button id="analyticsPrevYear" type="button" aria-label="上一年">‹</button>
+          <strong id="analyticsYearLabel">2026 年</strong>
+          <button id="analyticsNextYear" type="button" aria-label="下一年">›</button>
+        </div>
+        <div class="analytics-month-strip" id="analyticsMonthStrip" role="tablist" aria-label="选择月份"></div>
+      </section>
+
       <section class="analytics-hero">
-        <span>今年总支出</span>
+        <span id="analyticsTotalLabel">全年总支出</span>
         <strong id="analyticsYearTotal">$0.00</strong>
         <small id="analyticsYearCompare">1–12 月</small>
       </section>
@@ -72,7 +81,7 @@
         <div class="analytics-card-head">
           <div>
             <span>月度趋势</span>
-            <strong>每月消费</strong>
+            <strong id="analyticsTrendTitle">每月消费</strong>
           </div>
           <span class="analytics-badge" id="analyticsPeakLabel">暂无数据</span>
         </div>
@@ -225,6 +234,6 @@
   <script src="./js/config.js?v=3.0.6"></script>
   <script src="./js/db.js?v=3.0.6"></script>
   <script src="./js/cloud.js?v=3.0.6"></script>
-  <script src="./js/app.js?v=3.0.6"></script>
+  <script src="./js/app.js?v=3.0.7"></script>
 </body>
 </html>

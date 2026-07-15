@@ -1,12 +1,3 @@
-# V3.0.6 — UI Initialization Hotfix
+# V3.0.7 · Flexible Analytics
 
-## Fixed
-- Fixed mixed PWA cache versions that could load a new HTML shell with old JavaScript.
-- Changed JavaScript and CSS assets to network-first loading with versioned URLs.
-- Added defensive event binding so one missing element cannot disable the entire app.
-- Replaced `Array.prototype.at()` for broader iOS Safari compatibility.
-- Added a visible, non-destructive initialization error state.
-
-## Data safety
-- No IndexedDB records are deleted or migrated by this hotfix.
-- No Supabase schema changes are required.
+新增年份切换和月份筛选。选择月份后，总支出与类别百分比会按该月重新计算，年度趋势图保留全年走势并突出当前月份。

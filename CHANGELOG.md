@@ -1,4 +1,10 @@
-# V3.0.6
+# V3.0.7
+- 新增分析年份切换
+- 新增全年与月份筛选
+- 月份筛选后同步更新总额、类别占比和趋势图高亮
+- 年份范围根据实际账单数据自动生成
+
+# V3.0.7
 - Fixed PWA mixed-cache startup failure.
 - Added cache-busted JS/CSS resources.
 - Added defensive UI initialization.
